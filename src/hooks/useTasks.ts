@@ -1,0 +1,77 @@
+import { useCallback } from 'react'
+import { useAppStore } from '../stores/appStore'
+import { fetchTasks, completeTask as graphCompleteTask } from '../services/graph'
+import {
+  getCachedTasks,
+  saveTasksForList,
+  deleteTask as deleteCachedTask,
+} from '../services/cache'
+import type { TodoList } from '../types'
+
+/** 管理任务的获取、缓存和完成 */
+export function useTasks() {
+  const { setTasksForList, removeTask } = useAppStore()
+
+  /** 从缓存加载所有任务 */
+  const loadFromCache = useCallback(async () => {
+    const cached = await getCachedTasks()
+    // 按 listId 分组
+    const grouped: Record<string, typeof cached> = {}
+    for (const task of cached) {
+      if (!grouped[task.listId]) grouped[task.listId] = []
+      grouped[task.listId].push(task)
+    }
+    for (const [listId, tasks] of Object.entries(grouped)) {
+      setTasksForList(listId, tasks)
+    }
+    return cached
+  }, [setTasksForList])
+
+  /** 同步所有列表的任务 */
+  const syncTasks = useCallback(
+    async (accessToken: string, lists: TodoList[]) => {
+      const results = await Promise.allSettled(
+        lists.map(async (list) => {
+          const tasks = await fetchTasks(accessToken, list.id)
+          await saveTasksForList(list.id, tasks)
+          setTasksForList(list.id, tasks)
+          return tasks
+        })
+      )
+
+      // 收集所有成功获取的任务
+      const allTasks = results
+        .filter(
+          (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchTasks>>> =>
+            r.status === 'fulfilled'
+        )
+        .flatMap((r) => r.value)
+
+      return allTasks
+    },
+    [setTasksForList]
+  )
+
+  /** 完成单个任务（乐观更新） */
+  const completeTask = useCallback(
+    async (accessToken: string, listId: string, taskId: string) => {
+      // 乐观更新：先从 UI 移除
+      removeTask(listId, taskId)
+      await deleteCachedTask(taskId)
+
+      try {
+        // 发送 PATCH 请求到 Graph API
+        await graphCompleteTask(accessToken, listId, taskId)
+      } catch (error) {
+        // 失败时回滚：重新同步该列表的任务
+        const tasks = await fetchTasks(accessToken, listId)
+        await saveTasksForList(listId, tasks)
+        setTasksForList(listId, tasks)
+        throw error
+      }
+    },
+    [removeTask, setTasksForList]
+  )
+
+  return { loadFromCache, syncTasks, completeTask }
+}

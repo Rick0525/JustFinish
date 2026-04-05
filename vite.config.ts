@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { isAllowedUrl } from './src/utils/llmProviders'
 
 /**
  * 本地开发用的大模型代理中间件
@@ -26,6 +27,12 @@ function llmProxyPlugin(): Plugin {
             if (!targetUrl || !apiKey || !reqBody) {
               res.statusCode = 400
               res.end(JSON.stringify({ error: '缺少必要参数' }))
+              return
+            }
+
+            if (!isAllowedUrl(targetUrl)) {
+              res.statusCode = 403
+              res.end(JSON.stringify({ error: '目标地址不在允许列表中' }))
               return
             }
 

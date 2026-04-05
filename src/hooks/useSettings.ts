@@ -16,7 +16,7 @@ function loadLLMConfig(): LLMConfig | null {
 /** 检查大模型是否已配置 */
 export function isLLMConfigured(): boolean {
   const config = loadLLMConfig()
-  return !!(config?.endpoint && config?.apiKey && config?.model)
+  return !!(config?.providerId && config?.apiKey && config?.model)
 }
 
 /** React hook：管理大模型配置 */
@@ -38,6 +38,6 @@ export function useSettings() {
     llmConfig,
     saveLLMConfig,
     getLLMConfig,
-    isConfigured: !!(llmConfig?.endpoint && llmConfig?.apiKey && llmConfig?.model),
+    isConfigured: !!(llmConfig?.providerId && llmConfig?.apiKey && llmConfig?.model),
   }
 }

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useT } from '../i18n'
 import { useSettings } from '../hooks/useSettings'
+import { LLM_PROVIDERS, getProviderById } from '../utils/llmProviders'
 import type { LLMConfig } from '../types'
 
 interface SettingsModalProps {
@@ -22,16 +23,18 @@ export function SettingsModal({
   const t = useT()
   const { llmConfig, saveLLMConfig } = useSettings()
 
-  const [endpoint, setEndpoint] = useState(llmConfig?.endpoint || '')
+  const [providerId, setProviderId] = useState(llmConfig?.providerId || '')
   const [apiKey, setApiKey] = useState(llmConfig?.apiKey || '')
   const [model, setModel] = useState(llmConfig?.model || '')
   const [saved, setSaved] = useState(false)
 
   if (!open) return null
 
+  const selectedProvider = getProviderById(providerId)
+
   const handleSaveLLM = () => {
     const config: LLMConfig = {
-      endpoint: endpoint.trim().replace(/\/$/, ''), // 去掉末尾斜杠
+      providerId,
       apiKey: apiKey.trim(),
       model: model.trim(),
     }
@@ -41,7 +44,7 @@ export function SettingsModal({
     onLLMConfigSaved?.()
   }
 
-  const isValid = endpoint.trim() && apiKey.trim() && model.trim()
+  const isValid = providerId && apiKey.trim() && model.trim()
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -91,18 +94,29 @@ export function SettingsModal({
               {t.settingsLLM}
             </h3>
             <div className="space-y-3">
-              {/* API 地址 */}
+              {/* 供应商选择 */}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
-                  {t.settingsLLMEndpoint}
+                  {t.settingsLLMProvider}
                 </label>
-                <input
-                  type="url"
-                  value={endpoint}
-                  onChange={(e) => setEndpoint(e.target.value)}
-                  placeholder={t.settingsLLMEndpointPlaceholder}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+                <select
+                  value={providerId}
+                  onChange={(e) => setProviderId(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                >
+                  <option value="">{t.settingsLLMProviderPlaceholder}</option>
+                  {LLM_PROVIDERS.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+                {/* 显示 Base URL */}
+                {selectedProvider && (
+                  <p className="mt-1.5 text-xs text-gray-400 font-mono truncate">
+                    {selectedProvider.baseUrl}
+                  </p>
+                )}
               </div>
 
               {/* API 密钥 */}

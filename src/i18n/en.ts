@@ -34,8 +34,8 @@ export const en = {
   // 设置
   settings: 'Settings',
   settingsLLM: 'LLM Configuration',
-  settingsLLMEndpoint: 'API Endpoint',
-  settingsLLMEndpointPlaceholder: 'e.g. https://api.openai.com/v1',
+  settingsLLMProvider: 'API Provider',
+  settingsLLMProviderPlaceholder: 'Select a provider',
   settingsLLMApiKey: 'API Key',
   settingsLLMApiKeyPlaceholder: 'Enter your API key',
   settingsLLMModel: 'Model Name',

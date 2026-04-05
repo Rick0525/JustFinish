@@ -2,6 +2,7 @@
 // 将浏览器请求转发到用户配置的大模型 API，绕过 CORS 限制
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { isAllowedUrl } from '../src/utils/llmProviders'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 只允许 POST 请求
@@ -14,6 +15,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!targetUrl || !apiKey || !body) {
       return res.status(400).json({ error: '缺少必要参数：targetUrl, apiKey, body' })
+    }
+
+    if (!isAllowedUrl(targetUrl)) {
+      return res.status(403).json({ error: '目标地址不在允许列表中' })
     }
 
     // 转发请求到目标大模型 API

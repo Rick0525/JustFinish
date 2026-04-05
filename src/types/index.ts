@@ -46,8 +46,8 @@ export interface LLMScore {
 
 /** 大模型配置 */
 export interface LLMConfig {
-  /** API 地址（如 https://api.openai.com/v1） */
-  endpoint: string
+  /** 供应商 ID（对应 LLM_PROVIDERS 中的 id） */
+  providerId: string
   /** API 密钥 */
   apiKey: string
   /** 模型名称（如 gpt-4o-mini） */

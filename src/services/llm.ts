@@ -2,6 +2,7 @@ import type { TodoTask, LLMScore, LLMConfig } from '../types'
 import { isOverdue, isToday, formatDueDate } from '../utils/dates'
 import { getLang } from '../i18n'
 import { LLM_PROXY_PATH } from '../utils/constants'
+import { getProviderById } from '../utils/llmProviders'
 
 /** 构建任务摘要用于发送给大模型 */
 function buildTaskSummary(task: TodoTask): string {
@@ -87,6 +88,9 @@ export async function sortTasksWithLLM(
 ): Promise<LLMScore[]> {
   if (tasks.length === 0) return []
 
+  const provider = getProviderById(config.providerId)
+  if (!provider) throw new Error(`未知的供应商: ${config.providerId}`)
+
   // 准备任务摘要
   const taskSummaries = tasks.map((t) => ({
     id: t.id,
@@ -109,7 +113,7 @@ export async function sortTasksWithLLM(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        targetUrl: `${config.endpoint}/chat/completions`,
+        targetUrl: `${provider.baseUrl}/chat/completions`,
         apiKey: config.apiKey,
         body: {
           model: config.model,
@@ -125,10 +129,21 @@ export async function sortTasksWithLLM(
       throw new Error(`大模型请求失败 (${response.status}): ${errorText}`)
     }
 
-    const data = await response.json()
+    let data: unknown
+    try {
+      data = await response.json()
+    } catch {
+      throw new Error('大模型返回了非 JSON 响应')
+    }
+
+    // 校验 OpenAI 兼容响应结构
+    const choices = (data as { choices?: { message?: { content?: string } }[] })?.choices
+    if (!choices?.[0]?.message?.content) {
+      throw new Error('大模型返回格式不符合 OpenAI 兼容规范')
+    }
 
     // 解析大模型响应
-    const content = data.choices?.[0]?.message?.content || ''
+    const content = choices[0].message.content
     const scores = parseScores(content, batch.map((b) => b.id))
     allScores.push(...scores)
   }

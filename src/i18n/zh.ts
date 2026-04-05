@@ -34,8 +34,8 @@ export const zh = {
   // 设置
   settings: '设置',
   settingsLLM: '大模型配置',
-  settingsLLMEndpoint: 'API 地址',
-  settingsLLMEndpointPlaceholder: '如 https://api.openai.com/v1',
+  settingsLLMProvider: 'API 供应商',
+  settingsLLMProviderPlaceholder: '选择供应商',
   settingsLLMApiKey: 'API 密钥',
   settingsLLMApiKeyPlaceholder: '输入你的 API 密钥',
   settingsLLMModel: '模型名称',

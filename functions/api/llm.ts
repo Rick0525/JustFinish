@@ -1,6 +1,8 @@
 // Cloudflare Pages Function - 大模型 API 代理
 // 将浏览器请求转发到用户配置的大模型 API，绕过 CORS 限制
 
+import { isAllowedUrl } from '../../src/utils/llmProviders'
+
 interface Env {}
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -15,6 +17,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return new Response(
         JSON.stringify({ error: '缺少必要参数：targetUrl, apiKey, body' }),
         { status: 400, headers: { 'Content-Type': 'application/json' } }
+      )
+    }
+
+    if (!isAllowedUrl(targetUrl)) {
+      return new Response(
+        JSON.stringify({ error: '目标地址不在允许列表中' }),
+        { status: 403, headers: { 'Content-Type': 'application/json' } }
       )
     }
 

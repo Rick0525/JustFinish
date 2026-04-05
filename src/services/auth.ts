@@ -52,8 +52,8 @@ export async function getMsalInstance(): Promise<PublicClientApplication | null>
   // 处理重定向回调
   try {
     await msalInstance.handleRedirectPromise()
-  } catch {
-    // 忽略重定向处理错误
+  } catch (err) {
+    console.error('[MSAL] 重定向处理失败:', err)
   }
 
   return msalInstance

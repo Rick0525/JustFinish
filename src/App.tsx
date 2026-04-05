@@ -23,8 +23,8 @@ export default function App() {
             setAccount(accounts[0])
           }
         }
-      } catch {
-        // MSAL 初始化失败（可能 Client ID 无效）
+      } catch (err) {
+        console.error('[MSAL] 初始化失败:', err)
       } finally {
         setLoading(false)
       }

@@ -25,8 +25,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       // 保存 Client ID
       setClientId(clientId.trim())
       await onLogin()
-    } catch {
-      // 登录失败
+    } catch (err) {
+      console.error('[Auth] 登录失败:', err)
     } finally {
       setLoading(false)
     }

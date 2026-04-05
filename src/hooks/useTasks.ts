@@ -55,6 +55,9 @@ export function useTasks() {
   /** 完成单个任务（乐观更新） */
   const completeTask = useCallback(
     async (accessToken: string, listId: string, taskId: string) => {
+      // 保存快照用于回滚
+      const snapshot = useAppStore.getState().tasksByList[listId] || []
+
       // 乐观更新：先从 UI 移除
       removeTask(listId, taskId)
       await deleteCachedTask(taskId)
@@ -63,10 +66,16 @@ export function useTasks() {
         // 发送 PATCH 请求到 Graph API
         await graphCompleteTask(accessToken, listId, taskId)
       } catch (error) {
-        // 失败时回滚：重新同步该列表的任务
-        const tasks = await fetchTasks(accessToken, listId)
-        await saveTasksForList(listId, tasks)
-        setTasksForList(listId, tasks)
+        // 立即恢复快照
+        setTasksForList(listId, snapshot)
+        // 然后尝试从服务器获取最新数据
+        try {
+          const tasks = await fetchTasks(accessToken, listId)
+          await saveTasksForList(listId, tasks)
+          setTasksForList(listId, tasks)
+        } catch (fetchErr) {
+          console.error('[Tasks] 回滚后重新获取失败:', fetchErr)
+        }
         throw error
       }
     },

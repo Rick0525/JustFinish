@@ -57,17 +57,18 @@ export function Layout({ msalInstance, account }: LayoutProps) {
 
       // 同步完成后尝试大模型排序
       const config = getLLMConfig()
-      if (config?.endpoint && config?.apiKey && config?.model) {
+      if (config?.providerId && config?.apiKey && config?.model) {
         try {
           await runSort(config)
-        } catch {
-          // 大模型排序失败不影响主流程
+        } catch (err) {
+          console.error('[LLMSort] 排序失败:', err)
         }
       }
 
       // 3 秒后清除成功状态
       setTimeout(() => setSyncStatus('idle'), 3000)
-    } catch {
+    } catch (err) {
+      console.error('[Sync] 同步失败:', err)
       setSyncStatus('error')
     } finally {
       syncingRef.current = false
@@ -87,19 +88,19 @@ export function Layout({ msalInstance, account }: LayoutProps) {
   const handleSignOut = useCallback(async () => {
     try {
       await logout(msalInstance)
-    } catch {
-      // 忽略登出错误
+    } catch (err) {
+      console.error('[Auth] 登出失败:', err)
     }
   }, [msalInstance])
 
   /** 大模型配置保存后触发排序 */
   const handleLLMConfigSaved = useCallback(async () => {
     const config = getLLMConfig()
-    if (config?.endpoint && config?.apiKey && config?.model) {
+    if (config?.providerId && config?.apiKey && config?.model) {
       try {
         await runSort(config)
-      } catch {
-        // 忽略
+      } catch (err) {
+        console.error('[LLMSort] 排序失败:', err)
       }
     }
   }, [getLLMConfig, runSort])

@@ -2,7 +2,7 @@
 // 将浏览器请求转发到用户配置的大模型 API，绕过 CORS 限制
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { isAllowedUrl } from '../src/utils/llmProviders'
+import { isAllowedUrl } from './_shared/llmProviders'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // 只允许 POST 请求

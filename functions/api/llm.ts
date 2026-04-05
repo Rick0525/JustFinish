@@ -1,7 +1,7 @@
 // Cloudflare Pages Function - 大模型 API 代理
 // 将浏览器请求转发到用户配置的大模型 API，绕过 CORS 限制
 
-import { isAllowedUrl } from '../../src/utils/llmProviders'
+import { isAllowedUrl } from '../../api/_shared/llmProviders'
 
 type Env = Record<string, unknown>
 

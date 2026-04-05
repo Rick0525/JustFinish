@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/llm.ts": {
-      "includeFiles": "src/utils/llmProviders.ts"
-    }
-  },
   "rewrites": [
     { "source": "/api/llm", "destination": "/api/llm" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }

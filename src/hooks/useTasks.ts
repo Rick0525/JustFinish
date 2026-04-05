@@ -27,7 +27,7 @@ export function useTasks() {
     return cached
   }, [setTasksForList])
 
-  /** 同步所有列表的任务 */
+  /** 同步所有列表的任务，返回 { tasks, failedCount } */
   const syncTasks = useCallback(
     async (accessToken: string, lists: TodoList[]) => {
       const results = await Promise.allSettled(
@@ -39,7 +39,13 @@ export function useTasks() {
         })
       )
 
-      // 收集所有成功获取的任务
+      const failedCount = results.filter((r) => r.status === 'rejected').length
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          console.error('[Tasks] 列表同步失败:', r.reason)
+        }
+      }
+
       const allTasks = results
         .filter(
           (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchTasks>>> =>
@@ -47,7 +53,7 @@ export function useTasks() {
         )
         .flatMap((r) => r.value)
 
-      return allTasks
+      return { tasks: allTasks, failedCount }
     },
     [setTasksForList]
   )
@@ -66,8 +72,9 @@ export function useTasks() {
         // 发送 PATCH 请求到 Graph API
         await graphCompleteTask(accessToken, listId, taskId)
       } catch (error) {
-        // 立即恢复快照
+        // 立即恢复 UI 和缓存
         setTasksForList(listId, snapshot)
+        await saveTasksForList(listId, snapshot)
         // 然后尝试从服务器获取最新数据
         try {
           const tasks = await fetchTasks(accessToken, listId)

@@ -69,7 +69,7 @@ Respond with ONLY a JSON array, no other text:
 export function computeTaskHash(tasks: TodoTask[]): string {
   const sorted = [...tasks]
     .sort((a, b) => a.id.localeCompare(b.id))
-    .map((t) => `${t.id}:${t.title}:${t.dueDateTime?.dateTime || ''}`)
+    .map((t) => `${t.id}:${t.title}:${t.dueDateTime?.dateTime || ''}:${t.importance}`)
     .join('|')
   // 简单哈希
   let hash = 0

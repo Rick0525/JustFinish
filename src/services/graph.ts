@@ -21,7 +21,11 @@ async function graphFetch<T>(
     throw new Error(`Graph API 错误 (${response.status}): ${error}`)
   }
 
-  return response.json()
+  // 处理 204 No Content 或空响应体
+  const text = await response.text()
+  if (!text) return undefined as T
+
+  return JSON.parse(text)
 }
 
 // ============ Delta 同步列表 ============

@@ -3,7 +3,7 @@
 
 import { isAllowedUrl } from '../../src/utils/llmProviders'
 
-interface Env {}
+type Env = Record<string, unknown>
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {

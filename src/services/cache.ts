@@ -60,6 +60,19 @@ export async function deleteList(listId: string) {
   await db.delete('lists', listId)
 }
 
+/** 删除指定列表下的所有任务缓存 */
+export async function deleteTasksByList(listId: string) {
+  const db = await getDB()
+  const tx = db.transaction('tasks', 'readwrite')
+  const allTasks = await tx.store.getAll()
+  for (const task of allTasks) {
+    if (task.listId === listId) {
+      await tx.store.delete(task.id)
+    }
+  }
+  await tx.done
+}
+
 /** 清空所有列表缓存 */
 export async function clearLists() {
   const db = await getDB()

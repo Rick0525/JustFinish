@@ -22,7 +22,7 @@ if (isMsalPopupCallback()) {
 
   broadcastResponseToMainFrame().catch(() => {
     // 处理失败时静默关闭
-    try { window.close() } catch {}
+    try { window.close() } catch { /* ignore */ }
   })
 } else {
   createRoot(document.getElementById('root')!).render(

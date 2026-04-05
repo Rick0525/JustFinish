@@ -5,6 +5,7 @@ import {
   getCachedLists,
   saveLists,
   deleteList as deleteCachedList,
+  deleteTasksByList,
   getDeltaLink,
   saveDeltaLink,
 } from '../services/cache'
@@ -28,10 +29,11 @@ export function useLists() {
       const deltaLink = await getDeltaLink()
       const result = await fetchListsDelta(accessToken, deltaLink)
 
-      // 处理删除
+      // 处理删除（同时清理该列表下的任务缓存）
       for (const removedId of result.removed) {
         removeList(removedId)
         await deleteCachedList(removedId)
+        await deleteTasksByList(removedId)
       }
 
       // 处理新增/更新

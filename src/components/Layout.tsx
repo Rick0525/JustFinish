@@ -32,10 +32,11 @@ export function Layout({ msalInstance, account }: LayoutProps) {
 
   const { loadFromCache: loadListsCache, syncLists } = useLists()
   const { loadFromCache: loadTasksCache, syncTasks, completeTask } = useTasks()
-  const { loadFromCache: loadScoresCache, runSort } = useLLMSort()
+  const { loadFromCache: loadScoresCache, runSort, forceSort } = useLLMSort()
   const { getLLMConfig, isConfigured } = useSettings()
 
   const syncingRef = useRef(false)
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   /** 获取 access token */
   const getToken = useCallback(async () => {
@@ -51,9 +52,9 @@ export function Layout({ msalInstance, account }: LayoutProps) {
     try {
       const token = await getToken()
       const lists = await syncLists(token)
-      await syncTasks(token, lists)
+      const { failedCount } = await syncTasks(token, lists)
       await saveLastSync()
-      setSyncStatus('success')
+      setSyncStatus(failedCount > 0 ? 'error' : 'success')
 
       // 同步完成后尝试大模型排序
       const config = getLLMConfig()
@@ -65,8 +66,9 @@ export function Layout({ msalInstance, account }: LayoutProps) {
         }
       }
 
-      // 3 秒后清除成功状态
-      setTimeout(() => setSyncStatus('idle'), 3000)
+      // 3 秒后清除成功状态（先清理旧定时器）
+      clearTimeout(idleTimerRef.current)
+      idleTimerRef.current = setTimeout(() => setSyncStatus('idle'), 3000)
     } catch (err) {
       console.error('[Sync] 同步失败:', err)
       setSyncStatus('error')
@@ -98,12 +100,12 @@ export function Layout({ msalInstance, account }: LayoutProps) {
     const config = getLLMConfig()
     if (config?.providerId && config?.apiKey && config?.model) {
       try {
-        await runSort(config)
+        await forceSort(config)
       } catch (err) {
         console.error('[LLMSort] 排序失败:', err)
       }
     }
-  }, [getLLMConfig, runSort])
+  }, [getLLMConfig, forceSort])
 
   // 启动时加载缓存并同步
   useEffect(() => {

@@ -1,7 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { isAllowedUrl } from './api/_shared/llmProviders'
+import { isAllowedUrl } from './src/utils/llmProviders'
 
 /**
  * 本地开发用的大模型代理中间件

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useT } from '../i18n'
 import { useSettings } from '../hooks/useSettings'
-import { LLM_PROVIDERS, getProviderById } from '../../api/_shared/llmProviders'
+import { LLM_PROVIDERS, getProviderById } from '../utils/llmProviders'
 import type { LLMConfig } from '../types'
 
 interface SettingsModalProps {

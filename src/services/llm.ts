@@ -2,7 +2,7 @@ import type { TodoTask, LLMScore, LLMConfig } from '../types'
 import { isOverdue, isToday, formatDueDate } from '../utils/dates'
 import { getLang } from '../i18n'
 import { LLM_PROXY_PATH } from '../utils/constants'
-import { getProviderById } from '../../api/_shared/llmProviders'
+import { getProviderById } from '../utils/llmProviders'
 
 /** 构建任务摘要用于发送给大模型 */
 function buildTaskSummary(task: TodoTask): string {

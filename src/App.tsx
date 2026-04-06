@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { PublicClientApplication, AccountInfo } from '@azure/msal-browser'
+import { Analytics } from '@vercel/analytics/react'
 import { getMsalInstance, loginPopup, resetMsalInstance } from './services/auth'
 import { LoginScreen } from './components/LoginScreen'
 import { Layout } from './components/Layout'
@@ -47,20 +48,33 @@ export default function App() {
   // 加载中
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-        </svg>
-      </div>
+      <>
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <svg className="animate-spin h-8 w-8 text-blue-500" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        </div>
+        <Analytics />
+      </>
     )
   }
 
   // 未登录
   if (!msalInstance || !account) {
-    return <LoginScreen onLogin={handleLogin} />
+    return (
+      <>
+        <LoginScreen onLogin={handleLogin} />
+        <Analytics />
+      </>
+    )
   }
 
   // 已登录
-  return <Layout msalInstance={msalInstance} account={account} />
+  return (
+    <>
+      <Layout msalInstance={msalInstance} account={account} />
+      <Analytics />
+    </>
+  )
 }

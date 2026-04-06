@@ -31,7 +31,7 @@ export function Layout({ msalInstance, account }: LayoutProps) {
   const isSorting = useAppStore((s) => s.isSorting)
 
   const { loadFromCache: loadListsCache, syncLists } = useLists()
-  const { loadFromCache: loadTasksCache, syncTasks, completeTask } = useTasks()
+  const { loadFromCache: loadTasksCache, completeTask } = useTasks()
   const { loadFromCache: loadScoresCache, runSort, forceSort } = useLLMSort()
   const { getLLMConfig, isConfigured } = useSettings()
 
@@ -51,8 +51,7 @@ export function Layout({ msalInstance, account }: LayoutProps) {
 
     try {
       const token = await getToken()
-      const lists = await syncLists(token)
-      const { failedCount } = await syncTasks(token, lists)
+      const { failedCount } = await syncLists(token)
       await saveLastSync()
       setSyncStatus(failedCount > 0 ? 'error' : 'success')
 
@@ -75,7 +74,7 @@ export function Layout({ msalInstance, account }: LayoutProps) {
     } finally {
       syncingRef.current = false
     }
-  }, [getToken, syncLists, syncTasks, setSyncStatus, getLLMConfig, runSort])
+  }, [getToken, syncLists, setSyncStatus, getLLMConfig, runSort])
 
   /** 完成任务 */
   const handleComplete = useCallback(

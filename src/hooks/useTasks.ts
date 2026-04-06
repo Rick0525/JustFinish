@@ -6,9 +6,8 @@ import {
   saveTasksForList,
   deleteTask as deleteCachedTask,
 } from '../services/cache'
-import type { TodoList } from '../types'
 
-/** 管理任务的获取、缓存和完成 */
+/** 管理任务的缓存加载和完成操作 */
 export function useTasks() {
   const { setTasksForList, removeTask } = useAppStore()
 
@@ -26,37 +25,6 @@ export function useTasks() {
     }
     return cached
   }, [setTasksForList])
-
-  /** 同步所有列表的任务，返回 { tasks, failedCount } */
-  const syncTasks = useCallback(
-    async (accessToken: string, lists: TodoList[]) => {
-      const results = await Promise.allSettled(
-        lists.map(async (list) => {
-          const tasks = await fetchTasks(accessToken, list.id)
-          await saveTasksForList(list.id, tasks)
-          setTasksForList(list.id, tasks)
-          return tasks
-        })
-      )
-
-      const failedCount = results.filter((r) => r.status === 'rejected').length
-      for (const r of results) {
-        if (r.status === 'rejected') {
-          console.error('[Tasks] 列表同步失败:', r.reason)
-        }
-      }
-
-      const allTasks = results
-        .filter(
-          (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof fetchTasks>>> =>
-            r.status === 'fulfilled'
-        )
-        .flatMap((r) => r.value)
-
-      return { tasks: allTasks, failedCount }
-    },
-    [setTasksForList]
-  )
 
   /** 完成单个任务（乐观更新） */
   const completeTask = useCallback(
@@ -89,5 +57,5 @@ export function useTasks() {
     [removeTask, setTasksForList]
   )
 
-  return { loadFromCache, syncTasks, completeTask }
+  return { loadFromCache, completeTask }
 }

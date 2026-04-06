@@ -10,6 +10,9 @@ export const GRAPH_ENDPOINTS = {
   /** 获取指定列表的任务（需要替换 {listId}） */
   tasks: (listId: string) =>
     `${GRAPH_BASE_URL}/me/todo/lists/${listId}/tasks`,
+  /** 增量同步指定列表的任务（需要替换 {listId}） */
+  tasksDelta: (listId: string) =>
+    `${GRAPH_BASE_URL}/me/todo/lists/${listId}/tasks/delta`,
   /** 更新指定任务（需要替换 listId 和 taskId） */
   task: (listId: string, taskId: string) =>
     `${GRAPH_BASE_URL}/me/todo/lists/${listId}/tasks/${taskId}`,

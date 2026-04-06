@@ -98,7 +98,7 @@ export async function fetchListsDelta(
   return { upserted, removed, deltaLink: '' }
 }
 
-// ============ 获取任务 ============
+// ============ 获取任务（全量，供错误回滚用） ============
 
 interface TasksResponse {
   value: Omit<TodoTask, 'listId'>[]
@@ -106,7 +106,7 @@ interface TasksResponse {
 }
 
 /**
- * 获取指定列表中未完成的任务
+ * 获取指定列表中未完成的任务（全量拉取，仅用于 completeTask 错误回滚）
  * @param accessToken - Graph API 访问令牌
  * @param listId - 列表 ID
  */
@@ -127,6 +127,65 @@ export async function fetchTasks(
   }
 
   return tasks
+}
+
+// ============ Delta 增量同步任务 ============
+
+interface DeltaTaskItem extends Omit<TodoTask, 'listId'> {
+  '@removed'?: { reason: string }
+}
+
+/** Delta 同步任务结果 */
+export interface TasksDeltaResult {
+  /** 新增或更新的未完成任务 */
+  upserted: TodoTask[]
+  /** 需要从本地删除的任务 ID（已在服务端删除或已完成） */
+  removed: string[]
+  /** 新的 deltaLink，下次同步用 */
+  deltaLink: string
+}
+
+/**
+ * 使用 Delta 查询增量同步指定列表的任务
+ * @param accessToken - Graph API 访问令牌
+ * @param listId - 列表 ID
+ * @param deltaLink - 上次的 deltaLink（首次同步传 null）
+ */
+export async function fetchTasksDelta(
+  accessToken: string,
+  listId: string,
+  deltaLink: string | null
+): Promise<TasksDeltaResult> {
+  const upserted: TodoTask[] = []
+  const removed: string[] = []
+
+  let url = deltaLink || GRAPH_ENDPOINTS.tasksDelta(listId)
+
+  while (url) {
+    const response = await graphFetch<DeltaResponse<DeltaTaskItem>>(url, accessToken)
+
+    for (const item of response.value) {
+      if (item['@removed'] || item.status === 'completed') {
+        removed.push(item.id)
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { '@removed': _removed, ...task } = item as DeltaTaskItem & { '@removed'?: unknown }
+        upserted.push({ ...(task as Omit<TodoTask, 'listId'>), listId })
+      }
+    }
+
+    if (response['@odata.nextLink']) {
+      url = response['@odata.nextLink']
+    } else {
+      return {
+        upserted,
+        removed,
+        deltaLink: response['@odata.deltaLink'] || '',
+      }
+    }
+  }
+
+  return { upserted, removed, deltaLink: '' }
 }
 
 // ============ 完成任务 ============

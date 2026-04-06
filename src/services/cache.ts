@@ -113,6 +113,16 @@ export async function saveTasksForList(listId: string, tasks: TodoTask[]) {
   await tx.done
 }
 
+/** 批量 upsert 任务（不替换整个列表，只写入变化的任务） */
+export async function upsertTasks(tasks: TodoTask[]) {
+  const db = await getDB()
+  const tx = db.transaction('tasks', 'readwrite')
+  for (const task of tasks) {
+    await tx.store.put(task)
+  }
+  await tx.done
+}
+
 /** 从缓存删除单个任务 */
 export async function deleteTask(taskId: string) {
   const db = await getDB()
@@ -151,6 +161,24 @@ export async function getDeltaLink(): Promise<string | null> {
 export async function saveDeltaLink(link: string) {
   const db = await getDB()
   await db.put('syncMeta', link, 'deltaLink')
+}
+
+/** 获取指定列表的任务 Delta Link */
+export async function getTasksDeltaLink(listId: string): Promise<string | null> {
+  const db = await getDB()
+  return (await db.get('syncMeta', `tasksDeltaLink_${listId}`)) ?? null
+}
+
+/** 保存指定列表的任务 Delta Link */
+export async function saveTasksDeltaLink(listId: string, link: string) {
+  const db = await getDB()
+  await db.put('syncMeta', link, `tasksDeltaLink_${listId}`)
+}
+
+/** 删除指定列表的任务 Delta Link（列表被删除时清理） */
+export async function deleteTasksDeltaLink(listId: string) {
+  const db = await getDB()
+  await db.delete('syncMeta', `tasksDeltaLink_${listId}`)
 }
 
 /** 获取上次同步时间 */

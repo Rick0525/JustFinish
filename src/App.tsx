@@ -3,6 +3,8 @@ import type { PublicClientApplication, AccountInfo } from '@azure/msal-browser'
 import { getMsalInstance, loginPopup, resetMsalInstance } from './services/auth'
 import { LoginScreen } from './components/LoginScreen'
 import { Layout } from './components/Layout'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
 
 /** 应用根组件 */
 export default function App() {
@@ -62,5 +64,11 @@ export default function App() {
   }
 
   // 已登录
-  return <Layout msalInstance={msalInstance} account={account} />
+  return (
+    <>
+      <Layout msalInstance={msalInstance} account={account} />
+      <Analytics />
+      <SpeedInsights />
+    </>
+  )
 }

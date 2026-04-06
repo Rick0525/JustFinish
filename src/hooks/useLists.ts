@@ -58,30 +58,36 @@ export function useLists() {
       const allLists = await getCachedLists()
       setLists(allLists)
 
-      // ── 第二步：并行同步各列表的任务 ──
-      const taskResults = await Promise.allSettled(
-        allLists.map(async (list) => {
-          const taskDeltaLink = await getTasksDeltaLink(list.id)
-          const result = await fetchTasksDelta(accessToken, list.id, taskDeltaLink)
+      // ── 第二步：并发同步各列表的任务（限制并发数为 3） ──
+      const CONCURRENCY = 3
+      const taskResults: PromiseSettledResult<void>[] = []
+      for (let i = 0; i < allLists.length; i += CONCURRENCY) {
+        const batch = allLists.slice(i, i + CONCURRENCY)
+        const batchResults = await Promise.allSettled(
+          batch.map(async (list) => {
+            const taskDeltaLink = await getTasksDeltaLink(list.id)
+            const result = await fetchTasksDelta(accessToken, list.id, taskDeltaLink)
 
-          // 写入新增/更新的任务
-          if (result.upserted.length > 0) {
-            await upsertTasks(result.upserted)
-          }
-          // 删除已移除或已完成的任务
-          for (const taskId of result.removed) {
-            await deleteCachedTask(taskId)
-          }
-          // 保存新的 tasks deltaLink
-          if (result.deltaLink) {
-            await saveTasksDeltaLink(list.id, result.deltaLink)
-          }
+            // 写入新增/更新的任务
+            if (result.upserted.length > 0) {
+              await upsertTasks(result.upserted)
+            }
+            // 删除已移除或已完成的任务
+            for (const taskId of result.removed) {
+              await deleteCachedTask(taskId)
+            }
+            // 保存新的 tasks deltaLink
+            if (result.deltaLink) {
+              await saveTasksDeltaLink(list.id, result.deltaLink)
+            }
 
-          // 从缓存读取当前列表的完整任务并更新 store
-          const currentTasks = await getCachedTasksByList(list.id)
-          setTasksForList(list.id, currentTasks)
-        })
-      )
+            // 从缓存读取当前列表的完整任务并更新 store
+            const currentTasks = await getCachedTasksByList(list.id)
+            setTasksForList(list.id, currentTasks)
+          })
+        )
+        taskResults.push(...batchResults)
+      }
 
       const failedCount = taskResults.filter((r) => r.status === 'rejected').length
       for (const r of taskResults) {

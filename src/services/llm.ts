@@ -19,13 +19,8 @@ function buildTaskSummary(task: TodoTask): string {
   return summary
 }
 
-/** 构建中文 Prompt */
-function buildPromptZh(tasks: { id: string; summary: string }[]): string {
-  const taskList = tasks
-    .map((t, i) => `${i + 1}. id="${t.id}" ${t.summary}`)
-    .join('\n')
-
-  return `你是一个高效的任务优先级评估助手。请分析以下待办事项，对每个任务评估两个维度：
+/** 默认中文提示词模板 */
+export const DEFAULT_PROMPT_ZH = `你是一个高效的任务优先级评估助手。请分析以下待办事项，对每个任务评估两个维度：
 - urgency（紧急程度，1-10）：任务的时间敏感性。考虑截止日期、是否超时等。
 - importance（重要程度，1-10）：任务的影响力和价值。根据任务标题推断其重要性。
 
@@ -36,19 +31,13 @@ function buildPromptZh(tasks: { id: string; summary: string }[]): string {
 - 工作/学业相关的重要事项 > 日常杂务
 
 任务列表：
-${taskList}
+{{TASK_LIST}}
 
 请只返回 JSON 数组，不要任何其他文字：
 [{"id": "任务id", "urgency": 数字, "importance": 数字}]`
-}
 
-/** 构建英文 Prompt */
-function buildPromptEn(tasks: { id: string; summary: string }[]): string {
-  const taskList = tasks
-    .map((t, i) => `${i + 1}. id="${t.id}" ${t.summary}`)
-    .join('\n')
-
-  return `You are an efficient task priority evaluator. Analyze these tasks and rate each on two dimensions:
+/** 默认英文提示词模板 */
+export const DEFAULT_PROMPT_EN = `You are an efficient task priority evaluator. Analyze these tasks and rate each on two dimensions:
 - urgency (1-10): Time sensitivity. Consider due dates, overdue status.
 - importance (1-10): Impact and value. Infer from the task title.
 
@@ -59,10 +48,27 @@ Rules:
 - Work/academic tasks > routine chores
 
 Tasks:
-${taskList}
+{{TASK_LIST}}
 
 Respond with ONLY a JSON array, no other text:
 [{"id": "task_id", "urgency": number, "importance": number}]`
+
+/** 构建 Prompt（支持自定义模板） */
+function buildPrompt(
+  tasks: { id: string; summary: string }[],
+  customPrompt?: string
+): string {
+  const taskList = tasks
+    .map((t, i) => `${i + 1}. id="${t.id}" ${t.summary}`)
+    .join('\n')
+
+  if (customPrompt?.trim()) {
+    return customPrompt.replace('{{TASK_LIST}}', taskList)
+  }
+
+  const lang = getLang()
+  const template = lang === 'zh' ? DEFAULT_PROMPT_ZH : DEFAULT_PROMPT_EN
+  return template.replace('{{TASK_LIST}}', taskList)
 }
 
 /** 计算任务集合的哈希，用于判断是否需要重新排序 */
@@ -104,9 +110,7 @@ export async function sortTasksWithLLM(
   for (let i = 0; i < taskSummaries.length; i += batchSize) {
     const batch = taskSummaries.slice(i, i + batchSize)
 
-    // 根据界面语言选择 Prompt
-    const lang = getLang()
-    const prompt = lang === 'zh' ? buildPromptZh(batch) : buildPromptEn(batch)
+    const prompt = buildPrompt(batch, config.customPrompt)
 
     // 通过内置代理发送请求
     const response = await fetch(LLM_PROXY_PATH, {

@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useT } from '../i18n'
+import { useT, getLang } from '../i18n'
 import { useSettings } from '../hooks/useSettings'
 import { LLM_PROVIDERS, getProviderById } from '../utils/llmProviders'
+import { DEFAULT_PROMPT_ZH, DEFAULT_PROMPT_EN } from '../services/llm'
 import type { LLMConfig } from '../types'
 
 interface SettingsModalProps {
@@ -26,6 +27,7 @@ export function SettingsModal({
   const [providerId, setProviderId] = useState(llmConfig?.providerId || '')
   const [apiKey, setApiKey] = useState(llmConfig?.apiKey || '')
   const [model, setModel] = useState(llmConfig?.model || '')
+  const [customPrompt, setCustomPrompt] = useState(llmConfig?.customPrompt || '')
   const [saved, setSaved] = useState(false)
 
   if (!open) return null
@@ -37,6 +39,7 @@ export function SettingsModal({
       providerId,
       apiKey: apiKey.trim(),
       model: model.trim(),
+      customPrompt: customPrompt.trim() || undefined,
     }
     saveLLMConfig(config)
     setSaved(true)
@@ -144,6 +147,31 @@ export function SettingsModal({
                   onChange={(e) => setModel(e.target.value)}
                   placeholder={t.settingsLLMModelPlaceholder}
                   className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* 自定义提示词 */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs text-gray-500">
+                    {t.settingsLLMPrompt}
+                  </label>
+                  {customPrompt.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomPrompt('')}
+                      className="text-xs text-blue-500 hover:text-blue-600 transition-colors"
+                    >
+                      {t.settingsLLMPromptReset}
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                  placeholder={t.settingsLLMPromptPlaceholder + '\n\n' + (getLang() === 'zh' ? DEFAULT_PROMPT_ZH : DEFAULT_PROMPT_EN)}
+                  rows={6}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y font-mono leading-relaxed"
                 />
               </div>
 

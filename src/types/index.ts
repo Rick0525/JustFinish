@@ -52,6 +52,8 @@ export interface LLMConfig {
   apiKey: string
   /** 模型名称（如 gpt-4o-mini） */
   model: string
+  /** 自定义提示词（为空时使用默认提示词） */
+  customPrompt?: string
 }
 
 /** 四象限类型 */

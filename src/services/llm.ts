@@ -87,6 +87,40 @@ export function computeTaskHash(tasks: TodoTask[]): string {
   return hash.toString(36)
 }
 
+/** 浏览器直连 LLM（自定义供应商） */
+async function fetchDirect(
+  baseUrl: string,
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<Response> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`
+  }
+  return fetch(`${baseUrl.replace(/\/+$/, '')}/chat/completions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  })
+}
+
+/** 通过服务端代理请求 LLM */
+async function fetchViaProxy(
+  baseUrl: string,
+  apiKey: string,
+  body: Record<string, unknown>
+): Promise<Response> {
+  return fetch(LLM_PROXY_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      targetUrl: `${baseUrl}/chat/completions`,
+      apiKey,
+      body,
+    }),
+  })
+}
+
 /** 调用大模型进行任务排序 */
 export async function sortTasksWithLLM(
   tasks: TodoTask[],
@@ -94,8 +128,9 @@ export async function sortTasksWithLLM(
 ): Promise<LLMScore[]> {
   if (tasks.length === 0) return []
 
-  const provider = getProviderById(config.providerId)
-  if (!provider) throw new Error(`未知的供应商: ${config.providerId}`)
+  const isCustom = config.providerId === 'custom'
+  const baseUrl = isCustom ? config.customBaseUrl : getProviderById(config.providerId)?.baseUrl
+  if (!baseUrl) throw new Error(isCustom ? '未配置 Base URL' : `未知的供应商: ${config.providerId}`)
 
   // 准备任务摘要
   const taskSummaries = tasks.map((t) => ({
@@ -112,21 +147,16 @@ export async function sortTasksWithLLM(
 
     const prompt = buildPrompt(batch, config.customPrompt)
 
-    // 通过内置代理发送请求
-    const response = await fetch(LLM_PROXY_PATH, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        targetUrl: `${provider.baseUrl}/chat/completions`,
-        apiKey: config.apiKey,
-        body: {
-          model: config.model,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.3,
-          max_tokens: 4000,
-        },
-      }),
-    })
+    const requestBody = {
+      model: config.model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0.3,
+      max_tokens: 4000,
+    }
+
+    const response = isCustom
+      ? await fetchDirect(baseUrl, config.apiKey, requestBody)
+      : await fetchViaProxy(baseUrl, config.apiKey, requestBody)
 
     if (!response.ok) {
       const errorText = await response.text().catch(() => response.statusText)

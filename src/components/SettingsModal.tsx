@@ -28,11 +28,13 @@ export function SettingsModal({
   const [apiKey, setApiKey] = useState(llmConfig?.apiKey || '')
   const [model, setModel] = useState(llmConfig?.model || '')
   const [customPrompt, setCustomPrompt] = useState(llmConfig?.customPrompt || '')
+  const [customBaseUrl, setCustomBaseUrl] = useState(llmConfig?.customBaseUrl || '')
   const [saved, setSaved] = useState(false)
 
   if (!open) return null
 
-  const selectedProvider = getProviderById(providerId)
+  const isCustom = providerId === 'custom'
+  const selectedProvider = isCustom ? null : getProviderById(providerId)
 
   const handleSaveLLM = () => {
     const config: LLMConfig = {
@@ -40,6 +42,7 @@ export function SettingsModal({
       apiKey: apiKey.trim(),
       model: model.trim(),
       customPrompt: customPrompt.trim() || undefined,
+      customBaseUrl: isCustom ? customBaseUrl.trim() : undefined,
     }
     saveLLMConfig(config)
     setSaved(true)
@@ -47,7 +50,7 @@ export function SettingsModal({
     onLLMConfigSaved?.()
   }
 
-  const isValid = providerId && apiKey.trim() && model.trim()
+  const isValid = providerId && model.trim() && (isCustom ? customBaseUrl.trim() : apiKey.trim())
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -113,8 +116,9 @@ export function SettingsModal({
                       {p.name}
                     </option>
                   ))}
+                  <option value="custom">{t.settingsLLMCustomDirect}</option>
                 </select>
-                {/* 显示 Base URL */}
+                {/* 预设供应商显示 Base URL */}
                 {selectedProvider && (
                   <p className="mt-1.5 text-xs text-gray-400 font-mono truncate">
                     {selectedProvider.baseUrl}
@@ -122,10 +126,30 @@ export function SettingsModal({
                 )}
               </div>
 
+              {/* 自定义直连：Base URL 输入 + 直连提示 */}
+              {isCustom && (
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">
+                    Base URL
+                  </label>
+                  <input
+                    type="text"
+                    value={customBaseUrl}
+                    onChange={(e) => setCustomBaseUrl(e.target.value)}
+                    placeholder={t.settingsLLMBaseUrlPlaceholder}
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono"
+                  />
+                  <p className="mt-1.5 text-xs text-amber-600 bg-amber-50 rounded-md px-2.5 py-1.5">
+                    {t.settingsLLMDirectHint}
+                  </p>
+                </div>
+              )}
+
               {/* API 密钥 */}
               <div>
                 <label className="block text-xs text-gray-500 mb-1">
                   {t.settingsLLMApiKey}
+                  {isCustom && <span className="ml-1 text-gray-400">({t.settingsLLMOptional})</span>}
                 </label>
                 <input
                   type="password"

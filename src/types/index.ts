@@ -46,7 +46,7 @@ export interface LLMScore {
 
 /** 大模型配置 */
 export interface LLMConfig {
-  /** 供应商 ID（对应 LLM_PROVIDERS 中的 id） */
+  /** 供应商 ID（对应 LLM_PROVIDERS 中的 id，或 'custom' 表示自定义直连） */
   providerId: string
   /** API 密钥 */
   apiKey: string
@@ -54,6 +54,8 @@ export interface LLMConfig {
   model: string
   /** 自定义提示词（为空时使用默认提示词） */
   customPrompt?: string
+  /** 自定义 Base URL（仅 providerId 为 'custom' 时使用） */
+  customBaseUrl?: string
 }
 
 /** 四象限类型 */

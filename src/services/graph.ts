@@ -1,6 +1,18 @@
 import type { TodoList, TodoTask } from '../types'
 import { GRAPH_ENDPOINTS } from '../utils/constants'
 
+/**
+ * Delta / 全量拉取的单页大小（通过 `Prefer: odata.maxpagesize=N` 请求头传递）。
+ * Graph 默认每页约 50 条，有内置上限。给一个足够大的值让服务端按自己上限给满，一次尽量拿完。
+ * 参考：https://learn.microsoft.com/zh-cn/graph/api/todotask-delta —— 「请求标头」一节
+ */
+const DELTA_PAGE_SIZE = 1000
+
+/** 每个 Delta/全量请求都携带的分页偏好头 */
+const PREFER_HEADER: Record<string, string> = {
+  Prefer: `odata.maxpagesize=${DELTA_PAGE_SIZE}`,
+}
+
 /** 带 HTTP 状态码的 Graph API 错误 */
 export class GraphError extends Error {
   status: number
@@ -79,7 +91,7 @@ export async function fetchListsDelta(
   const upserted: TodoList[] = []
   const removed: string[] = []
 
-  // 首次用 delta 端点，后续用上次的 deltaLink
+  // 首次用 delta 端点，后续用上次的 deltaLink；分页大小通过 Prefer 头传递
   let url = deltaLink || GRAPH_ENDPOINTS.listsDelta
   let retriedFromScratch = false
 
@@ -87,7 +99,9 @@ export async function fetchListsDelta(
   while (url) {
     let response: DeltaResponse<DeltaListItem>
     try {
-      response = await graphFetch<DeltaResponse<DeltaListItem>>(url, accessToken)
+      response = await graphFetch<DeltaResponse<DeltaListItem>>(url, accessToken, {
+        headers: PREFER_HEADER,
+      })
     } catch (err) {
       // delta token 失效：清空已累计结果，从基础端点重试一次
       if (isDeltaExpired(err) && !retriedFromScratch) {
@@ -149,9 +163,11 @@ export async function fetchTasks(
   const tasks: TodoTask[] = []
   let url = `${GRAPH_ENDPOINTS.tasks(listId)}?$filter=status ne 'completed'`
 
-  // 处理分页
+  // 处理分页；分页大小用 Prefer 头
   while (url) {
-    const response = await graphFetch<TasksResponse>(url, accessToken)
+    const response = await graphFetch<TasksResponse>(url, accessToken, {
+      headers: PREFER_HEADER,
+    })
     for (const task of response.value) {
       tasks.push({ ...task, listId })
     }
@@ -199,7 +215,9 @@ export async function fetchTasksDelta(
   while (url) {
     let response: DeltaResponse<DeltaTaskItem>
     try {
-      response = await graphFetch<DeltaResponse<DeltaTaskItem>>(url, accessToken)
+      response = await graphFetch<DeltaResponse<DeltaTaskItem>>(url, accessToken, {
+        headers: PREFER_HEADER,
+      })
     } catch (err) {
       if (isDeltaExpired(err) && !retriedFromScratch) {
         retriedFromScratch = true

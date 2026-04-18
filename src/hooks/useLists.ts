@@ -72,13 +72,16 @@ export function useLists() {
       const allLists = await getCachedLists()
       setLists(allLists)
 
-      // ── 第二步：并发同步各列表的任务（限制并发数为 3） ──
+      // ── 第二步：并发同步各列表的任务（滑动窗口，始终保持 3 个在跑） ──
       const CONCURRENCY = 3
-      const taskResults: PromiseSettledResult<void>[] = []
-      for (let i = 0; i < allLists.length; i += CONCURRENCY) {
-        const batch = allLists.slice(i, i + CONCURRENCY)
-        const batchResults = await Promise.allSettled(
-          batch.map(async (list) => {
+      const taskResults: PromiseSettledResult<void>[] = new Array(allLists.length)
+      let cursor = 0
+      const worker = async () => {
+        while (true) {
+          const idx = cursor++
+          if (idx >= allLists.length) return
+          const list = allLists[idx]
+          try {
             const taskDeltaLink = await getTasksDeltaLink(list.id)
             const result = await fetchTasksDelta(accessToken, list.id, taskDeltaLink)
 
@@ -103,10 +106,16 @@ export function useLists() {
             // 从缓存读取当前列表的完整任务并更新 store
             const currentTasks = await getCachedTasksByList(list.id)
             setTasksForList(list.id, currentTasks)
-          })
-        )
-        taskResults.push(...batchResults)
+
+            taskResults[idx] = { status: 'fulfilled', value: undefined }
+          } catch (reason) {
+            taskResults[idx] = { status: 'rejected', reason }
+          }
+        }
       }
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, allLists.length) }, worker)
+      )
 
       const failedCount = taskResults.filter((r) => r.status === 'rejected').length
       for (const r of taskResults) {

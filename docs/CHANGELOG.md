@@ -2,6 +2,14 @@
 
 ## 2026-04-18
 
+### 优化：Delta 同步并发与单页大小
+
+- **`Prefer: odata.maxpagesize=1000`**：`fetchListsDelta` / `fetchTasksDelta` / `fetchTasks` 每次 `graphFetch` 都附加此请求头，让服务端按自己的上限给满单页、大幅减少 `$skiptoken` 续传次数
+  - 选用 `Prefer` 而非 `$top`：参考 [todoTask: delta 官方文档](https://learn.microsoft.com/zh-cn/graph/api/todotask-delta) 的"请求标头"一节，这是 OData 规范下设置单页大小的标准做法；`$top` 语义为"总量上限"对 Delta 容易产生歧义
+  - Prefer 是请求头（不会随 `@odata.nextLink` / `@odata.deltaLink` 编码进 URL），循环里每个请求都要带
+  - 常量 `DELTA_PAGE_SIZE` / `PREFER_HEADER` 在 `src/services/graph.ts` 顶部，调整改一处即可
+- **任务同步改成滑动窗口并发（`useLists.syncLists`）**：原先"3 个一批、等整批完成再下一批"在尾部会退化成"只剩一个清单在串行拉 skiptoken、其他两条通道空着"；现在用 worker 池始终保持 3 个清单在跑，一个完成立刻补下一个，总用时按 CONCURRENCY = 3 充分摊平
+
 ### 新增：侧栏清单排序与空清单自动隐藏
 
 - 侧边栏和「按清单分组」视图改用新选择器 `getSidebarLists`，排序规则：

@@ -37,31 +37,36 @@ function createMsalConfig(clientId: string): Configuration {
   }
 }
 
-let msalInstance: PublicClientApplication | null = null
+let msalInstancePromise: Promise<PublicClientApplication> | null = null
 
-/** 获取或创建 MSAL 实例 */
+/** 获取或创建 MSAL 实例（保证 initialize 完成后才返回，且并发调用共享同一个初始化 Promise） */
 export async function getMsalInstance(): Promise<PublicClientApplication | null> {
   const clientId = getClientId()
   if (!clientId) return null
 
-  if (msalInstance) return msalInstance
-
-  msalInstance = new PublicClientApplication(createMsalConfig(clientId))
-  await msalInstance.initialize()
-
-  // 处理重定向回调
-  try {
-    await msalInstance.handleRedirectPromise()
-  } catch (err) {
-    console.error('[MSAL] 重定向处理失败:', err)
+  if (!msalInstancePromise) {
+    msalInstancePromise = (async () => {
+      const instance = new PublicClientApplication(createMsalConfig(clientId))
+      await instance.initialize()
+      try {
+        await instance.handleRedirectPromise()
+      } catch (err) {
+        console.error('[MSAL] 重定向处理失败:', err)
+      }
+      return instance
+    })().catch((err) => {
+      // 初始化失败时清掉缓存，允许下次重试
+      msalInstancePromise = null
+      throw err
+    })
   }
 
-  return msalInstance
+  return msalInstancePromise
 }
 
 /** 重置 MSAL 实例（当 Client ID 变更时调用） */
 export function resetMsalInstance() {
-  msalInstance = null
+  msalInstancePromise = null
 }
 
 /** 弹窗登录 */

@@ -1,6 +1,21 @@
 import type { TodoList, TodoTask } from '../types'
 import { GRAPH_ENDPOINTS } from '../utils/constants'
 
+/** 带 HTTP 状态码的 Graph API 错误 */
+export class GraphError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'GraphError'
+    this.status = status
+  }
+}
+
+/** delta token 失效时 Graph 返回 410 SyncStateNotFound */
+function isDeltaExpired(err: unknown): boolean {
+  return err instanceof GraphError && err.status === 410
+}
+
 /** Graph API 请求辅助函数 */
 async function graphFetch<T>(
   url: string,
@@ -18,7 +33,7 @@ async function graphFetch<T>(
 
   if (!response.ok) {
     const error = await response.text().catch(() => response.statusText)
-    throw new Error(`Graph API 错误 (${response.status}): ${error}`)
+    throw new GraphError(response.status, `Graph API 错误 (${response.status}): ${error}`)
   }
 
   // 处理 204 No Content 或空响应体
@@ -48,6 +63,8 @@ export interface ListsDeltaResult {
   removed: string[]
   /** 新的 deltaLink，下次同步用 */
   deltaLink: string
+  /** 本次是否因 deltaLink 过期而做了全量重置（调用方需对账清理本地缓存） */
+  reset: boolean
 }
 
 /**
@@ -64,10 +81,24 @@ export async function fetchListsDelta(
 
   // 首次用 delta 端点，后续用上次的 deltaLink
   let url = deltaLink || GRAPH_ENDPOINTS.listsDelta
+  let retriedFromScratch = false
 
   // 循环处理分页（nextLink）
   while (url) {
-    const response = await graphFetch<DeltaResponse<DeltaListItem>>(url, accessToken)
+    let response: DeltaResponse<DeltaListItem>
+    try {
+      response = await graphFetch<DeltaResponse<DeltaListItem>>(url, accessToken)
+    } catch (err) {
+      // delta token 失效：清空已累计结果，从基础端点重试一次
+      if (isDeltaExpired(err) && !retriedFromScratch) {
+        retriedFromScratch = true
+        upserted.length = 0
+        removed.length = 0
+        url = GRAPH_ENDPOINTS.listsDelta
+        continue
+      }
+      throw err
+    }
 
     for (const item of response.value) {
       if (item['@removed']) {
@@ -90,12 +121,13 @@ export async function fetchListsDelta(
         upserted,
         removed,
         deltaLink: response['@odata.deltaLink'] || '',
+        reset: retriedFromScratch,
       }
     }
   }
 
   // 不应到达这里，但为了类型安全返回
-  return { upserted, removed, deltaLink: '' }
+  return { upserted, removed, deltaLink: '', reset: retriedFromScratch }
 }
 
 // ============ 获取任务（全量，供错误回滚用） ============
@@ -143,6 +175,8 @@ export interface TasksDeltaResult {
   removed: string[]
   /** 新的 deltaLink，下次同步用 */
   deltaLink: string
+  /** 本次是否因 deltaLink 过期而做了全量重置 */
+  reset: boolean
 }
 
 /**
@@ -160,9 +194,22 @@ export async function fetchTasksDelta(
   const removed: string[] = []
 
   let url = deltaLink || GRAPH_ENDPOINTS.tasksDelta(listId)
+  let retriedFromScratch = false
 
   while (url) {
-    const response = await graphFetch<DeltaResponse<DeltaTaskItem>>(url, accessToken)
+    let response: DeltaResponse<DeltaTaskItem>
+    try {
+      response = await graphFetch<DeltaResponse<DeltaTaskItem>>(url, accessToken)
+    } catch (err) {
+      if (isDeltaExpired(err) && !retriedFromScratch) {
+        retriedFromScratch = true
+        upserted.length = 0
+        removed.length = 0
+        url = GRAPH_ENDPOINTS.tasksDelta(listId)
+        continue
+      }
+      throw err
+    }
 
     for (const item of response.value) {
       if (item['@removed'] || item.status === 'completed') {
@@ -181,11 +228,12 @@ export async function fetchTasksDelta(
         upserted,
         removed,
         deltaLink: response['@odata.deltaLink'] || '',
+        reset: retriedFromScratch,
       }
     }
   }
 
-  return { upserted, removed, deltaLink: '' }
+  return { upserted, removed, deltaLink: '', reset: retriedFromScratch }
 }
 
 // ============ 完成任务 ============

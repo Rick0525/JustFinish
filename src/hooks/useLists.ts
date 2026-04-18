@@ -36,12 +36,26 @@ export function useLists() {
       const deltaLink = await getDeltaLink()
       const listsResult = await fetchListsDelta(accessToken, deltaLink)
 
-      // 处理删除（同时清理任务缓存和 tasks deltaLink）
-      for (const removedId of listsResult.removed) {
-        removeList(removedId)
-        await deleteCachedList(removedId)
-        await deleteTasksByList(removedId)
-        await deleteTasksDeltaLink(removedId)
+      // deltaLink 过期重置：upserted 为当前全量，缓存里多出来的是已被删除的
+      if (listsResult.reset) {
+        const prevCached = await getCachedLists()
+        const stillExists = new Set(listsResult.upserted.map((l) => l.id))
+        for (const l of prevCached) {
+          if (!stillExists.has(l.id)) {
+            removeList(l.id)
+            await deleteCachedList(l.id)
+            await deleteTasksByList(l.id)
+            await deleteTasksDeltaLink(l.id)
+          }
+        }
+      } else {
+        // 正常增量：处理显式删除
+        for (const removedId of listsResult.removed) {
+          removeList(removedId)
+          await deleteCachedList(removedId)
+          await deleteTasksByList(removedId)
+          await deleteTasksDeltaLink(removedId)
+        }
       }
 
       // 处理新增/更新
@@ -67,6 +81,11 @@ export function useLists() {
           batch.map(async (list) => {
             const taskDeltaLink = await getTasksDeltaLink(list.id)
             const result = await fetchTasksDelta(accessToken, list.id, taskDeltaLink)
+
+            // delta 过期重置：upserted 是当前全量，清空该 list 的本地缓存避免残留
+            if (result.reset) {
+              await deleteTasksByList(list.id)
+            }
 
             // 写入新增/更新的任务
             if (result.upserted.length > 0) {

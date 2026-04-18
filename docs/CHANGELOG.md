@@ -2,6 +2,15 @@
 
 ## 2026-04-18
 
+### 新增：侧栏清单排序与空清单自动隐藏
+
+- 侧边栏和「按清单分组」视图改用新选择器 `getSidebarLists`，排序规则：
+  - `wellknownListName === 'defaultList'` 的清单置顶
+  - 其余按未完成任务数降序（`tasksByList[id].length` 即未完成数，缓存层已过滤 `completed`）
+  - 相同未完成数的清单保留原拉取顺序（依赖 `Array.sort` 的稳定性）
+- 未完成数为 0 的清单（包括 defaultList 本身为空时）默认不展示，不新增开关；用户在「设置 → 清单可见性」里的手动隐藏机制保持不变
+- `ByListView` 里原先的 `listsWithTasks` 过滤已被选择器内建，去掉以避免重复逻辑
+
 ### 新增：清单可见性（List Visibility）
 
 - 设置弹窗新增「清单可见性」区块，每个清单一个复选框，另提供「全部显示 / 全部隐藏」快捷按钮；勾选即时保存至 localStorage（`justfinish_hidden_lists`）

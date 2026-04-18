@@ -77,8 +77,14 @@ MSAL v5 使用 `BroadcastChannel` API 进行弹窗与父窗口的通信（非旧
 ### 清单可见性
 
 - 用户在设置弹窗中勾选要隐藏的清单，隐藏 id 列表存在 localStorage（`justfinish_hidden_lists`）并镜像到 Zustand 的 `hiddenListIds`
-- Store 暴露派生选择器 `getVisibleLists` / `getVisibleTasks`，侧边栏、三个视图、LLM 排序统一使用
+- Store 暴露派生选择器 `getVisibleLists` / `getVisibleTasks`，LLM 排序及全部/四象限视图统一使用
 - 隐藏策略：UI 不展示 + 排除出 LLM 输入；任务本身仍正常 Delta 同步，localStorage 设置不跨设备
+
+### 侧栏清单排序
+
+- 侧边栏和「按清单分组」视图用 `getSidebarLists`：在 `getVisibleLists` 的基础上再过滤掉未完成数为 0 的清单，并按「defaultList 置顶 → 未完成数降序」排序
+- 未完成数直接取 `tasksByList[listId].length`（缓存层只保留未完成任务，见下文「Delta 同步」）
+- defaultList 为空时也隐藏；用户需要显示仍可通过设置弹窗的「清单可见性」反向操作
 
 ### Delta 同步的 410 自恢复
 

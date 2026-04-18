@@ -154,3 +154,34 @@ export function getVisibleTasks(
   }
   return result
 }
+
+/**
+ * 侧栏清单：
+ * 1) 过滤掉被手动隐藏的清单（`hiddenListIds`）
+ * 2) 过滤掉未完成数为 0 的清单（defaultList 也一样，为空就隐藏）
+ * 3) 排序：defaultList 置顶，其余按未完成数降序；
+ *    Array.sort 稳定，同数量时保留原顺序
+ *
+ * 备注：`tasksByList` 里只缓存未完成任务（详见 graph.ts 的 `$filter=status ne 'completed'`
+ * 及 delta 中对 `completed`/`@removed` 的处理），所以 `length` 即未完成数。
+ */
+export function getSidebarLists(
+  state: Pick<AppState, 'lists' | 'hiddenListIds' | 'tasksByList'>
+): TodoList[] {
+  const hidden = new Set(state.hiddenListIds)
+  const withMeta = state.lists
+    .filter((l) => !hidden.has(l.id))
+    .map((list) => ({
+      list,
+      count: state.tasksByList[list.id]?.length ?? 0,
+      isDefault: list.wellknownListName === 'defaultList',
+    }))
+    .filter((x) => x.count > 0)
+
+  withMeta.sort((a, b) => {
+    if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1
+    return b.count - a.count
+  })
+
+  return withMeta.map((x) => x.list)
+}

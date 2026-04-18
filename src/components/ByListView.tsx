@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useAppStore, getVisibleLists } from '../stores/appStore'
+import { useAppStore, getSidebarLists } from '../stores/appStore'
 import { TaskList } from './TaskList'
 import { useT } from '../i18n'
 
@@ -12,25 +12,20 @@ export function ByListView({ onComplete }: ByListViewProps) {
   const t = useT()
   const allLists = useAppStore((s) => s.lists)
   const hiddenListIds = useAppStore((s) => s.hiddenListIds)
-  const lists = useMemo(
-    () => getVisibleLists({ lists: allLists, hiddenListIds }),
-    [allLists, hiddenListIds]
-  )
   const tasksByList = useAppStore((s) => s.tasksByList)
+  const lists = useMemo(
+    () => getSidebarLists({ lists: allLists, hiddenListIds, tasksByList }),
+    [allLists, hiddenListIds, tasksByList]
+  )
   const llmScores = useAppStore((s) => s.llmScores)
   const selectedListId = useAppStore((s) => s.selectedListId)
 
-  // 如果选中了特定列表，只显示该列表（且该列表仍在可见范围内）
+  // 选中特定清单时只展示该清单；getSidebarLists 已过滤掉空清单
   const displayLists = selectedListId
     ? lists.filter((l) => l.id === selectedListId)
     : lists
 
-  // 过滤掉没有任务的列表
-  const listsWithTasks = displayLists.filter(
-    (l) => (tasksByList[l.id]?.length ?? 0) > 0
-  )
-
-  if (listsWithTasks.length === 0) {
+  if (displayLists.length === 0) {
     return (
       <div className="py-12 text-center text-gray-400 text-sm">
         {t.noTasks}
@@ -40,7 +35,7 @@ export function ByListView({ onComplete }: ByListViewProps) {
 
   return (
     <div className="space-y-6">
-      {listsWithTasks.map((list) => (
+      {displayLists.map((list) => (
         <div key={list.id}>
           {/* 列表标题 */}
           <div className="flex items-center gap-2 mb-2 px-3">

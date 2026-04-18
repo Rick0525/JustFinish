@@ -1,5 +1,5 @@
 import { useMemo, type ReactNode } from 'react'
-import { useAppStore, getVisibleLists } from '../stores/appStore'
+import { useAppStore, getSidebarLists } from '../stores/appStore'
 import { useT } from '../i18n'
 import type { ViewMode } from '../types'
 
@@ -13,11 +13,11 @@ export function Sidebar({ visible, onClose }: SidebarProps) {
   const t = useT()
   const allLists = useAppStore((s) => s.lists)
   const hiddenListIds = useAppStore((s) => s.hiddenListIds)
-  const lists = useMemo(
-    () => getVisibleLists({ lists: allLists, hiddenListIds }),
-    [allLists, hiddenListIds]
-  )
   const tasksByList = useAppStore((s) => s.tasksByList)
+  const lists = useMemo(
+    () => getSidebarLists({ lists: allLists, hiddenListIds, tasksByList }),
+    [allLists, hiddenListIds, tasksByList]
+  )
   const viewMode = useAppStore((s) => s.viewMode)
   const selectedListId = useAppStore((s) => s.selectedListId)
   const setViewMode = useAppStore((s) => s.setViewMode)

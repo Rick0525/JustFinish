@@ -71,8 +71,24 @@ MSAL v5 使用 `BroadcastChannel` API 进行弹窗与父窗口的通信（非旧
 ```
 启动 → 从 IndexedDB 读缓存 → 填充 Zustand → 立即渲染
     → 后台 Delta 同步列表 → 获取任务 → 更新缓存 + 状态
-    → 任务变化 + 已配置大模型 → 调用 LLM 排序 → 缓存分数 → 重新渲染
+    → 任务变化 + 已配置大模型 → 调用 LLM 排序（仅可见清单）→ 缓存分数 → 重新渲染
 ```
+
+### 清单可见性
+
+- 用户在设置弹窗中勾选要隐藏的清单，隐藏 id 列表存在 localStorage（`justfinish_hidden_lists`）并镜像到 Zustand 的 `hiddenListIds`
+- Store 暴露派生选择器 `getVisibleLists` / `getVisibleTasks`，侧边栏、三个视图、LLM 排序统一使用
+- 隐藏策略：UI 不展示 + 排除出 LLM 输入；任务本身仍正常 Delta 同步，localStorage 设置不跨设备
+
+### Delta 同步的 410 自恢复
+
+- Graph Delta API 在 `deltaLink` 过期时返回 410 `SyncStateNotFound`，需要从基础端点重新发起一次「全量 delta」
+- `graphFetch` 抛出带 HTTP 状态的 `GraphError`；`fetchListsDelta` / `fetchTasksDelta` 内部捕获 410 后自动回退端点重试并在结果里标记 `reset: true`
+- 调用方 `useLists.syncLists` 见到 `reset` 时做对账清理：列表层面删除缓存中不在新全量里的 list 和其任务/deltaLink；任务层面先清空该 list 的本地任务再 upsert，防止服务端已删除的任务在本地成孤儿
+
+### MSAL 并发初始化
+
+- `auth.getMsalInstance()` 缓存的是初始化 Promise 而非实例，避免 React StrictMode 双挂载下第二次调用在 `initialize()` 未完成时就拿到实例
 
 ### 部署架构
 

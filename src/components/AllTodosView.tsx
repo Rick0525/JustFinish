@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useAppStore, getAllTasks } from '../stores/appStore'
+import { useAppStore, getVisibleTasks } from '../stores/appStore'
 import { TaskList } from './TaskList'
 import { sortTasksByDate } from '../utils/quadrant'
 import { getCompositeScore } from '../utils/quadrant'
@@ -14,11 +14,12 @@ interface AllTodosViewProps {
 export function AllTodosView({ onComplete }: AllTodosViewProps) {
   const t = useT()
   const tasksByList = useAppStore((s) => s.tasksByList)
+  const hiddenListIds = useAppStore((s) => s.hiddenListIds)
   const llmScores = useAppStore((s) => s.llmScores)
   const isSorting = useAppStore((s) => s.isSorting)
 
   const sortedTasks = useMemo(() => {
-    const tasks = getAllTasks({ tasksByList } as Parameters<typeof getAllTasks>[0])
+    const tasks = getVisibleTasks({ tasksByList, hiddenListIds })
 
     // 有大模型评分时按综合分数排序
     const hasScores = Object.keys(llmScores).length > 0
@@ -38,7 +39,7 @@ export function AllTodosView({ onComplete }: AllTodosViewProps) {
 
     // 无评分时按截止日期排序
     return sortTasksByDate(tasks)
-  }, [tasksByList, llmScores])
+  }, [tasksByList, hiddenListIds, llmScores])
 
   const hasLLM = isLLMConfigured()
   const hasScores = Object.keys(llmScores).length > 0

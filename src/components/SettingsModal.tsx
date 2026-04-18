@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useT, getLang } from '../i18n'
 import { useSettings } from '../hooks/useSettings'
+import { useAppStore } from '../stores/appStore'
 import { LLM_PROVIDERS, getProviderById } from '../utils/llmProviders'
 import { DEFAULT_PROMPT_ZH, DEFAULT_PROMPT_EN } from '../services/llm'
 import type { LLMConfig } from '../types'
@@ -23,6 +24,27 @@ export function SettingsModal({
 }: SettingsModalProps) {
   const t = useT()
   const { llmConfig, saveLLMConfig } = useSettings()
+  const lists = useAppStore((s) => s.lists)
+  const hiddenListIds = useAppStore((s) => s.hiddenListIds)
+  const setHiddenListIds = useAppStore((s) => s.setHiddenListIds)
+  const selectedListId = useAppStore((s) => s.selectedListId)
+  const setSelectedListId = useAppStore((s) => s.setSelectedListId)
+
+  const hiddenSet = new Set(hiddenListIds)
+  const toggleListHidden = (listId: string) => {
+    const next = hiddenSet.has(listId)
+      ? hiddenListIds.filter((id) => id !== listId)
+      : [...hiddenListIds, listId]
+    setHiddenListIds(next)
+    if (!hiddenSet.has(listId) && selectedListId === listId) {
+      setSelectedListId(null)
+    }
+  }
+  const showAllLists = () => setHiddenListIds([])
+  const hideAllLists = () => {
+    setHiddenListIds(lists.map((l) => l.id))
+    if (selectedListId) setSelectedListId(null)
+  }
 
   const [providerId, setProviderId] = useState(llmConfig?.providerId || '')
   const [apiKey, setApiKey] = useState(llmConfig?.apiKey || '')
@@ -208,6 +230,64 @@ export function SettingsModal({
                 {saved ? t.settingsLLMSaved : t.settingsLLMSave}
               </button>
             </div>
+          </div>
+
+          {/* 清单可见性 */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-sm font-medium text-gray-700">
+                {t.settingsListVisibility}
+              </h3>
+              {lists.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={showAllLists}
+                    className="text-xs text-blue-500 hover:text-blue-600 transition-colors"
+                  >
+                    {t.settingsListVisibilityShowAll}
+                  </button>
+                  <span className="text-xs text-gray-300">·</span>
+                  <button
+                    type="button"
+                    onClick={hideAllLists}
+                    className="text-xs text-blue-500 hover:text-blue-600 transition-colors"
+                  >
+                    {t.settingsListVisibilityHideAll}
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mb-2">
+              {t.settingsListVisibilityHint}
+            </p>
+            {lists.length === 0 ? (
+              <div className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2.5">
+                {t.settingsListVisibilityEmpty}
+              </div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-100">
+                {lists.map((list) => {
+                  const visible = !hiddenSet.has(list.id)
+                  return (
+                    <label
+                      key={list.id}
+                      className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={visible}
+                        onChange={() => toggleListHidden(list.id)}
+                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+                      />
+                      <span className="text-sm text-gray-700 truncate">
+                        {list.displayName}
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

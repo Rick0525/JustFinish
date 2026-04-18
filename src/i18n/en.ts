@@ -58,6 +58,14 @@ export const en = {
   settingsSave: 'Save',
   settingsClose: 'Close',
 
+  // List visibility
+  settingsListVisibility: 'List Visibility',
+  settingsListVisibilityHint: 'Unchecked lists are hidden from all views and excluded from AI smart sorting',
+  settingsListVisibilityShowAll: 'Show all',
+  settingsListVisibilityHideAll: 'Hide all',
+  settingsListVisibilityEmpty: 'No lists loaded yet',
+  noVisibleLists: 'No visible lists. Enable some in Settings.',
+
   // 同步
   syncSyncing: 'Syncing...',
   syncSuccess: 'Synced',

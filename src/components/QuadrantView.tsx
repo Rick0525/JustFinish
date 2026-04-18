@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useAppStore, getAllTasks } from '../stores/appStore'
+import { useAppStore, getVisibleTasks } from '../stores/appStore'
 import { TaskList } from './TaskList'
 import { getQuadrant, getQuadrantByDate } from '../utils/quadrant'
 import { useT } from '../i18n'
@@ -53,6 +53,7 @@ const quadrantConfig: Record<
 export function QuadrantView({ onComplete }: QuadrantViewProps) {
   const t = useT()
   const tasksByList = useAppStore((s) => s.tasksByList)
+  const hiddenListIds = useAppStore((s) => s.hiddenListIds)
   const llmScores = useAppStore((s) => s.llmScores)
   const isSorting = useAppStore((s) => s.isSorting)
 
@@ -61,7 +62,7 @@ export function QuadrantView({ onComplete }: QuadrantViewProps) {
 
   // 将任务分配到四象限
   const quadrants = useMemo(() => {
-    const tasks = getAllTasks({ tasksByList } as Parameters<typeof getAllTasks>[0])
+    const tasks = getVisibleTasks({ tasksByList, hiddenListIds })
     const result: Record<Quadrant, TodoTask[]> = {
       doFirst: [],
       schedule: [],
@@ -76,7 +77,7 @@ export function QuadrantView({ onComplete }: QuadrantViewProps) {
     }
 
     return result
-  }, [tasksByList, llmScores])
+  }, [tasksByList, hiddenListIds, llmScores])
 
   const quadrantOrder: Quadrant[] = ['doFirst', 'schedule', 'delegate', 'later']
 

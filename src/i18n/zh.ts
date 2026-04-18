@@ -58,6 +58,14 @@ export const zh = {
   settingsSave: '保存',
   settingsClose: '关闭',
 
+  // 清单可见性
+  settingsListVisibility: '清单可见性',
+  settingsListVisibilityHint: '取消勾选的清单会从视图中隐藏，且不参与 AI 智能排序',
+  settingsListVisibilityShowAll: '全部显示',
+  settingsListVisibilityHideAll: '全部隐藏',
+  settingsListVisibilityEmpty: '尚未加载清单',
+  noVisibleLists: '没有可见的清单，请在设置中开启',
+
   // 同步
   syncSyncing: '同步中...',
   syncSuccess: '同步完成',

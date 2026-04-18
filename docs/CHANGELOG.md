@@ -1,5 +1,33 @@
 # 变更日志
 
+## 2026-04-18
+
+### 新增：清单可见性（List Visibility）
+
+- 设置弹窗新增「清单可见性」区块，每个清单一个复选框，另提供「全部显示 / 全部隐藏」快捷按钮；勾选即时保存至 localStorage（`justfinish_hidden_lists`）
+- 被隐藏的清单**不在侧边栏和三个视图中展示**，且**不参与 LLM 智能排序**，从源头减少无效 token 消耗；任务本身仍按原逻辑同步，底层缓存完整
+- Store 层新增派生选择器 `getVisibleLists` / `getVisibleTasks`，`useLLMSort.runSort` / `forceSort` 两处统一使用过滤后的任务集，`computeTaskHash` 自然适配可见集变化，无需改缓存
+- 隐藏当前选中的清单时自动把 `selectedListId` 置为 null 回到「全部」，避免空屏
+- 清单在 MS 侧被删除（`removeList`）时同步清理 `hiddenListIds` 中对应 id，避免僵尸残留
+
+### 修复：同步按钮直接报错
+
+- **问题**：Microsoft Graph Delta API 的 `deltaLink` 过期后会返回 410 `SyncStateNotFound`，原代码直接抛出导致每次点同步都弹「同步失败」
+- **修复**：
+  - `graphFetch` 改抛 `GraphError`（携带 HTTP 状态码）
+  - `fetchListsDelta` / `fetchTasksDelta` 捕获 410 后清空累计结果、回退到基础 delta 端点自动重试一次，并在返回值中带上 `reset: boolean` 标志
+  - `useLists.syncLists` 根据 `reset` 做对账清理：列表层面删除缓存中不在新全量里的 list 及其任务/deltaLink；任务层面先 `deleteTasksByList` 再 upsert，避免服务端已删除的任务在本地成为孤儿
+
+### 修复：刷新页面偶发 `uninitialized_public_client_application`
+
+- **问题**：React 18 StrictMode 下 `useEffect` 双挂载时并发调用 `getMsalInstance()`：第二次调用看到模块变量已被赋值直接返回实例，但此时 `initialize()` 尚未 resolve，后续 `getAllAccounts()` 就抛错
+- **修复**：`auth.ts` 改为缓存**初始化 Promise** 而非实例，所有并发调用共享同一个初始化过程；失败时清掉缓存以允许下次重试
+
+### 修复：Sidebar 无限渲染导致主页白屏
+
+- **问题**：`useAppStore((s) => getVisibleLists(s))` 选择器每次执行都 `.filter` 产生新数组引用，触发 zustand `useSyncExternalStore` 无限重渲染
+- **修复**：`Sidebar.tsx` / `ByListView.tsx` 改为分别订阅 `lists` 与 `hiddenListIds`，再用 `useMemo` 计算可见清单；依赖是引用稳定的 store 值
+
 ## v1.0.0 (2026-04-05)
 
 ### 代码审查修复（第二轮）

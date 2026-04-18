@@ -29,6 +29,7 @@ export const STORAGE_KEYS = {
   llmConfig: 'justfinish_llm_config',
   viewMode: 'justfinish_view_mode',
   clientId: 'justfinish_client_id',
+  hiddenLists: 'justfinish_hidden_lists',
 } as const
 
 // IndexedDB 数据库名

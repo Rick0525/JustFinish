@@ -1,4 +1,5 @@
-import { useAppStore } from '../stores/appStore'
+import { useMemo } from 'react'
+import { useAppStore, getVisibleLists } from '../stores/appStore'
 import { TaskList } from './TaskList'
 import { useT } from '../i18n'
 
@@ -9,12 +10,17 @@ interface ByListViewProps {
 /** 按列表分组视图 */
 export function ByListView({ onComplete }: ByListViewProps) {
   const t = useT()
-  const lists = useAppStore((s) => s.lists)
+  const allLists = useAppStore((s) => s.lists)
+  const hiddenListIds = useAppStore((s) => s.hiddenListIds)
+  const lists = useMemo(
+    () => getVisibleLists({ lists: allLists, hiddenListIds }),
+    [allLists, hiddenListIds]
+  )
   const tasksByList = useAppStore((s) => s.tasksByList)
   const llmScores = useAppStore((s) => s.llmScores)
   const selectedListId = useAppStore((s) => s.selectedListId)
 
-  // 如果选中了特定列表，只显示该列表
+  // 如果选中了特定列表，只显示该列表（且该列表仍在可见范围内）
   const displayLists = selectedListId
     ? lists.filter((l) => l.id === selectedListId)
     : lists

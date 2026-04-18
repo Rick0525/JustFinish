@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { useAppStore, getAllTasks } from '../stores/appStore'
+import { useAppStore, getVisibleTasks } from '../stores/appStore'
 import {
   getCachedLLMScores,
   saveLLMScores,
@@ -26,7 +26,7 @@ export function useLLMSort() {
   const runSort = useCallback(
     async (config: LLMConfig) => {
       const state = useAppStore.getState()
-      const tasks = getAllTasks(state)
+      const tasks = getVisibleTasks(state)
 
       if (tasks.length === 0) return
 
@@ -58,7 +58,7 @@ export function useLLMSort() {
   const forceSort = useCallback(
     async (config: LLMConfig) => {
       const state = useAppStore.getState()
-      const tasks = getAllTasks(state)
+      const tasks = getVisibleTasks(state)
 
       if (tasks.length === 0) return
 

@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react'
-import { useAppStore } from '../stores/appStore'
+import { useMemo, type ReactNode } from 'react'
+import { useAppStore, getVisibleLists } from '../stores/appStore'
 import { useT } from '../i18n'
 import type { ViewMode } from '../types'
 
@@ -11,7 +11,12 @@ interface SidebarProps {
 /** 侧边栏组件 */
 export function Sidebar({ visible, onClose }: SidebarProps) {
   const t = useT()
-  const lists = useAppStore((s) => s.lists)
+  const allLists = useAppStore((s) => s.lists)
+  const hiddenListIds = useAppStore((s) => s.hiddenListIds)
+  const lists = useMemo(
+    () => getVisibleLists({ lists: allLists, hiddenListIds }),
+    [allLists, hiddenListIds]
+  )
   const tasksByList = useAppStore((s) => s.tasksByList)
   const viewMode = useAppStore((s) => s.viewMode)
   const selectedListId = useAppStore((s) => s.selectedListId)

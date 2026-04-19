@@ -195,22 +195,42 @@ export interface TasksDeltaResult {
   reset: boolean
 }
 
+/** `fetchTasksDelta` 按页流式回调的入参 */
+export interface TasksDeltaPage {
+  /** 本页新增或更新的未完成任务 */
+  upserted: TodoTask[]
+  /** 本页需要从本地删除的任务 ID（已在服务端删除或已完成） */
+  removed: string[]
+  /**
+   * 仅在 410 重试后的**首次**回调里为 `true`——表示这一轮 Delta 在函数内部已回退到基础端点，
+   * 当前及后续页均是服务端全量快照而非增量。调用方据此决定是否切到缓冲 / 对账模式。
+   */
+  reset: boolean
+}
+
 /**
  * 使用 Delta 查询增量同步指定列表的任务
  * @param accessToken - Graph API 访问令牌
  * @param listId - 列表 ID
  * @param deltaLink - 上次的 deltaLink（首次同步传 null）
+ * @param onPage - 可选的流式回调：每拉完一页立即回调，然后再请求 `nextLink`。
+ *   传入 `onPage` 时**不再累积**整体数组（避免大账号撑爆内存），返回值的 `upserted` / `removed`
+ *   均为空数组，只有 `deltaLink` 和 `reset` 有意义。
  */
 export async function fetchTasksDelta(
   accessToken: string,
   listId: string,
-  deltaLink: string | null
+  deltaLink: string | null,
+  onPage?: (page: TasksDeltaPage) => void | Promise<void>
 ): Promise<TasksDeltaResult> {
+  const streaming = typeof onPage === 'function'
   const upserted: TodoTask[] = []
   const removed: string[] = []
 
   let url = deltaLink || GRAPH_ENDPOINTS.tasksDelta(listId)
   let retriedFromScratch = false
+  // 流式模式下，仅第一次触发 onPage 时带 reset=true
+  let resetPending = false
 
   while (url) {
     let response: DeltaResponse<DeltaTaskItem>
@@ -220,7 +240,10 @@ export async function fetchTasksDelta(
       })
     } catch (err) {
       if (isDeltaExpired(err) && !retriedFromScratch) {
+        // TODO: edge case——若流式调用方已经通过 onPage 写过数据再遇到 410（理论上 nextLink 不过期，
+        // 实际几乎不触发），之前写入的 IDB/store 不会被撤销。Graph 规范承诺 nextLink 不过期，暂不补偿。
         retriedFromScratch = true
+        resetPending = true
         upserted.length = 0
         removed.length = 0
         url = GRAPH_ENDPOINTS.tasksDelta(listId)
@@ -229,14 +252,22 @@ export async function fetchTasksDelta(
       throw err
     }
 
+    // 解析本页，流式模式写入本页局部数组，累积模式写进函数级数组
+    const pageUpserted: TodoTask[] = streaming ? [] : upserted
+    const pageRemoved: string[] = streaming ? [] : removed
     for (const item of response.value) {
       if (item['@removed'] || item.status === 'completed') {
-        removed.push(item.id)
+        pageRemoved.push(item.id)
       } else {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { '@removed': _removed, ...task } = item as DeltaTaskItem & { '@removed'?: unknown }
-        upserted.push({ ...(task as Omit<TodoTask, 'listId'>), listId })
+        pageUpserted.push({ ...(task as Omit<TodoTask, 'listId'>), listId })
       }
+    }
+
+    if (streaming) {
+      await onPage!({ upserted: pageUpserted, removed: pageRemoved, reset: resetPending })
+      resetPending = false
     }
 
     if (response['@odata.nextLink']) {

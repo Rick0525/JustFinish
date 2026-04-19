@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import type { TodoTask } from '../types'
 import { useAppStore } from '../stores/appStore'
 import { fetchListsDelta, fetchTasksDelta } from '../services/graph'
 import {
@@ -12,7 +13,7 @@ import {
   saveTasksDeltaLink,
   deleteTasksDeltaLink,
   upsertTasks,
-  deleteTask as deleteCachedTask,
+  deleteTasks,
   getCachedTasksByList,
 } from '../services/cache'
 
@@ -83,29 +84,51 @@ export function useLists() {
           const list = allLists[idx]
           try {
             const taskDeltaLink = await getTasksDeltaLink(list.id)
-            const result = await fetchTasksDelta(accessToken, list.id, taskDeltaLink)
+            // worker 入口读一次该清单的本地快照，之后每页只在内存里合并，免掉后续全表扫
+            let memTasks = await getCachedTasksByList(list.id)
+            // 410 重置标志：一旦置位就进入「缓冲」模式，到拉完后再按 id diff 统一落地
+            let isReset = false
+            const resetBuffer: TodoTask[] = []
 
-            // delta 过期重置：upserted 是当前全量，清空该 list 的本地缓存避免残留
-            if (result.reset) {
-              await deleteTasksByList(list.id)
+            const result = await fetchTasksDelta(
+              accessToken,
+              list.id,
+              taskDeltaLink,
+              async ({ upserted, removed, reset }) => {
+                if (reset) isReset = true
+                if (isReset) {
+                  // 重置场景：只缓冲服务端全量快照，UI/IDB 都不动，避免屏幕闪烁
+                  // 全量端点不会返回 @removed，所以只需缓冲 upserted
+                  resetBuffer.push(...upserted)
+                  return
+                }
+                // 正常增量：写 IDB 持久化 + 在内存快照里合并 + 立刻推 store 渐进渲染
+                if (upserted.length > 0) await upsertTasks(upserted)
+                if (removed.length > 0) await deleteTasks(removed)
+                const upsertIds = new Set(upserted.map((t) => t.id))
+                const removedSet = new Set(removed)
+                memTasks = memTasks
+                  .filter((t) => !upsertIds.has(t.id) && !removedSet.has(t.id))
+                  .concat(upserted)
+                setTasksForList(list.id, memTasks)
+              }
+            )
+
+            if (isReset) {
+              // 全量快照到手：只对 id 差集做动作，不全清再重灌，屏幕平滑替换
+              const snapshotIds = new Set(resetBuffer.map((t) => t.id))
+              const toDelete = memTasks
+                .filter((t) => !snapshotIds.has(t.id))
+                .map((t) => t.id)
+              if (toDelete.length > 0) await deleteTasks(toDelete)
+              if (resetBuffer.length > 0) await upsertTasks(resetBuffer)
+              // 服务端权威全量 = resetBuffer，直接推给 store
+              setTasksForList(list.id, resetBuffer)
             }
 
-            // 写入新增/更新的任务
-            if (result.upserted.length > 0) {
-              await upsertTasks(result.upserted)
-            }
-            // 删除已移除或已完成的任务
-            for (const taskId of result.removed) {
-              await deleteCachedTask(taskId)
-            }
-            // 保存新的 tasks deltaLink
             if (result.deltaLink) {
               await saveTasksDeltaLink(list.id, result.deltaLink)
             }
-
-            // 从缓存读取当前列表的完整任务并更新 store
-            const currentTasks = await getCachedTasksByList(list.id)
-            setTasksForList(list.id, currentTasks)
 
             taskResults[idx] = { status: 'fulfilled', value: undefined }
           } catch (reason) {

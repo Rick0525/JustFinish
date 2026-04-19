@@ -185,14 +185,12 @@ interface DeltaTaskItem extends Omit<TodoTask, 'listId'> {
 
 /** Delta 同步任务结果 */
 export interface TasksDeltaResult {
-  /** 新增或更新的未完成任务 */
+  /** 新增或更新的未完成任务（传入 onPage 时为空数组，改从回调消费） */
   upserted: TodoTask[]
-  /** 需要从本地删除的任务 ID（已在服务端删除或已完成） */
+  /** 需要从本地删除的任务 ID（传入 onPage 时为空数组，改从回调消费） */
   removed: string[]
   /** 新的 deltaLink，下次同步用 */
   deltaLink: string
-  /** 本次是否因 deltaLink 过期而做了全量重置 */
-  reset: boolean
 }
 
 /** `fetchTasksDelta` 按页流式回调的入参 */
@@ -277,12 +275,11 @@ export async function fetchTasksDelta(
         upserted,
         removed,
         deltaLink: response['@odata.deltaLink'] || '',
-        reset: retriedFromScratch,
       }
     }
   }
 
-  return { upserted, removed, deltaLink: '', reset: retriedFromScratch }
+  return { upserted, removed, deltaLink: '' }
 }
 
 // ============ 完成任务 ============

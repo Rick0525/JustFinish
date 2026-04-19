@@ -1,5 +1,15 @@
 # 变更日志
 
+## 2026-04-19（下午）
+
+### 修复：同步中 `completeTask` 的任务被下一页合并"复活"
+
+- **问题**：上午那版流式 Delta 渲染把 worker 入口时的 IDB 快照 `memTasks` 当成每页合并的基——如果同步期间用户 `completeTask` 掉某任务（store 和 IDB 都已去除），下一页 `onPage` 仍从 `memTasks` 合并就会把它写回 `setTasksForList`，在 UI 上看到"任务复活"一下又消失；重置路径还会连带写回 IDB
+- **修复**：
+  - 正常增量分支的合并基改成 `useAppStore.getState().tasksByList[listId] ?? []`（读 store 当前状态，反映同步期间的所有本地改动），`memTasks` 不再在 `onPage` 内迭代
+  - 重置收尾用 `memTasks` 与 store 当前状态做 diff 识别"同步期间本地已完成"的任务，从 `resetBuffer` 里剔除后再落 IDB + 推 store，避免被服务端过期快照覆盖
+- **代价**：零——`useAppStore.getState()` 是 zustand 的同步内存读，不额外触 IDB；worker 入口那次 `getCachedTasksByList` 保留（只给 reset 路径用）
+
 ## 2026-04-19
 
 ### 优化：首次 Delta 同步的渐进渲染

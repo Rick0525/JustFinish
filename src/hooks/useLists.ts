@@ -84,8 +84,8 @@ export function useLists() {
           const list = allLists[idx]
           try {
             const taskDeltaLink = await getTasksDeltaLink(list.id)
-            // worker 入口读一次该清单的本地快照，之后每页只在内存里合并，免掉后续全表扫
-            let memTasks = await getCachedTasksByList(list.id)
+            // worker 入口读一次 IDB 基线：reset 收尾时用来识别「同步期间本地已完成」的任务
+            const memTasks = await getCachedTasksByList(list.id)
             // 410 重置标志：一旦置位就进入「缓冲」模式，到拉完后再按 id diff 统一落地
             let isReset = false
             const resetBuffer: TodoTask[] = []
@@ -102,28 +102,45 @@ export function useLists() {
                   resetBuffer.push(...upserted)
                   return
                 }
-                // 正常增量：写 IDB 持久化 + 在内存快照里合并 + 立刻推 store 渐进渲染
+                // 正常增量：写 IDB 持久化 + 合并到 store 推渐进渲染
                 if (upserted.length > 0) await upsertTasks(upserted)
                 if (removed.length > 0) await deleteTasks(removed)
+                // 合并基用 store 当前状态而非 worker 入口的固定快照：
+                // 同步期间用户若 completeTask 掉某个任务，store 已去掉它，这里不会再把它复活
+                const current =
+                  useAppStore.getState().tasksByList[list.id] ?? []
                 const upsertIds = new Set(upserted.map((t) => t.id))
                 const removedSet = new Set(removed)
-                memTasks = memTasks
+                const next = current
                   .filter((t) => !upsertIds.has(t.id) && !removedSet.has(t.id))
                   .concat(upserted)
-                setTasksForList(list.id, memTasks)
+                setTasksForList(list.id, next)
               }
             )
 
             if (isReset) {
-              // 全量快照到手：只对 id 差集做动作，不全清再重灌，屏幕平滑替换
-              const snapshotIds = new Set(resetBuffer.map((t) => t.id))
+              // 全量快照到手：按 id 差集动作，且保留同步期间的本地删除
+              // memTasks 有但 store 当前没的 id = 用户在同步中 completeTask 掉的任务
+              // 这些任务服务端还没察觉（PATCH 可能晚于 Graph 快照），从 finalTasks 里剔除，
+              // 避免被 resetBuffer 复活；下一轮 delta 会带它们回来做最终收敛
+              const current =
+                useAppStore.getState().tasksByList[list.id] ?? []
+              const currentIds = new Set(current.map((t) => t.id))
+              const locallyRemoved = new Set(
+                memTasks
+                  .filter((t) => !currentIds.has(t.id))
+                  .map((t) => t.id)
+              )
+              const finalTasks = resetBuffer.filter(
+                (t) => !locallyRemoved.has(t.id)
+              )
+              const finalIds = new Set(finalTasks.map((t) => t.id))
               const toDelete = memTasks
-                .filter((t) => !snapshotIds.has(t.id))
+                .filter((t) => !finalIds.has(t.id))
                 .map((t) => t.id)
               if (toDelete.length > 0) await deleteTasks(toDelete)
-              if (resetBuffer.length > 0) await upsertTasks(resetBuffer)
-              // 服务端权威全量 = resetBuffer，直接推给 store
-              setTasksForList(list.id, resetBuffer)
+              if (finalTasks.length > 0) await upsertTasks(finalTasks)
+              setTasksForList(list.id, finalTasks)
             }
 
             if (result.deltaLink) {

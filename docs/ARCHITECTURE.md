@@ -96,9 +96,12 @@ MSAL v5 使用 `BroadcastChannel` API 进行弹窗与父窗口的通信（非旧
 ### 任务 Delta 的流式渲染
 
 - `fetchTasksDelta` 接受可选 `onPage(page)` 回调，每拉完一页立即回调；有 `onPage` 时函数内部不再累积整体数组，避免大账号首次同步上千条任务撑爆内存
-- `useLists` 进入 worker 时读一次 `getCachedTasksByList` 建立内存快照 `memTasks`；之后每页在内存里按 id 做集合合并并立刻 `setTasksForList` 推 store，UI 渐进出现任务。IDB 写入（`upsertTasks` / `deleteTasks`）仍然做，作为下次 `loadFromCache` 的持久来源
-- 410 重置场景（`onPage` 首次带 `reset: true`）切换到「缓冲模式」：不动 IDB 也不动 store，累积到 `resetBuffer`；拉完后与 `memTasks` 做 id diff，只对服务端已删的任务调 `deleteTasks`、其余 `upsertTasks` 覆盖——避免屏幕上已有任务先消失再填回来的闪烁
-- 性能：一个 worker 不管该清单分几页，IDB 全表扫只发生 1 次（worker 入口）
+- `useLists` 每页合并的**基**是 `useAppStore.getState().tasksByList[listId] ?? []`（store 当前状态），不是 worker 入口的固定快照——这样同步期间用户若 `completeTask` 掉某任务，下一页合并不会把它"复活"；IDB 写入（`upsertTasks` / `deleteTasks`）照旧，作为下次 `loadFromCache` 的持久来源
+- worker 入口仍读一次 `getCachedTasksByList` 存为 `memTasks`，仅用于 **410 重置收尾**的 id diff 基线
+- 410 重置场景（`onPage` 首次带 `reset: true`）切换到「缓冲模式」：不动 IDB 也不动 store，累积到 `resetBuffer`；拉完后做两层过滤：
+  - 用 `memTasks vs store` 差集识别"同步期间用户本地已完成/删除"的任务，从 `resetBuffer` 里剔除（避免被服务端过期快照复活，下一轮 delta 会自然收敛）
+  - 剩下的 `finalTasks` 与 `memTasks` 做 id diff，只对差集调 `deleteTasks` / `upsertTasks`，屏幕平滑替换
+- 性能：IDB 全表扫每个 worker 仍只发生 1 次（worker 入口读 `memTasks`）；每页合并走 store 内存读（零成本）
 
 ### MSAL 并发初始化
 

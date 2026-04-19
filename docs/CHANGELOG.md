@@ -1,5 +1,15 @@
 # 变更日志
 
+## 2026-04-19
+
+### 优化：首次 Delta 同步的渐进渲染
+
+- **问题**：首次登录 / 清缓存后，`useLists.syncLists` 要等 `fetchTasksDelta` 把某清单**全部** delta 页（Graph 单页 ~512，且 delta 返回包含全部历史任务——含已完成）都拉完，才一次性 `upsertTasks` + `setTasksForList`。重度用户单清单分 5-10 页，用户要盯着空白（或旧缓存）等到最后一页 `@odata.deltaLink` 到手才看到任务
+- **改法**：`fetchTasksDelta` 新增可选 `onPage(page)` 回调，每页立即交给 `useLists` 处理——正常增量每页写 IDB + 推 store 渐进渲染；410 重置场景切缓冲模式，等全部页拉完后对内存快照做 id diff 只动差集（屏幕不闪）
+- **worker 内存快照**：进入 worker 时读一次 `getCachedTasksByList` 建立 `memTasks`，之后所有页都在内存里按 id 合并，单 worker IDB 全表读取从 N 页 → 1 次
+- **批量删事务**：`cache.ts` 新增 `deleteTasks(ids)`（共用一个事务），替换 `useLists` 里对 `removed` 数组的循环 `deleteCachedTask`，减少事务次数
+- `TasksDeltaResult` 去掉 `reset` 字段（改造后只剩 `useLists` 一个调用方，它只读 `page.reset`）；`fetchListsDelta` / `fetchTasks` 不动
+
 ## 2026-04-18
 
 ### 优化：Delta 同步并发与单页大小

@@ -129,6 +129,17 @@ export async function deleteTask(taskId: string) {
   await db.delete('tasks', taskId)
 }
 
+/** 批量删除任务（共用一个事务，避免每个 id 各开一次） */
+export async function deleteTasks(ids: string[]) {
+  if (ids.length === 0) return
+  const db = await getDB()
+  const tx = db.transaction('tasks', 'readwrite')
+  for (const id of ids) {
+    await tx.store.delete(id)
+  }
+  await tx.done
+}
+
 // ============ 大模型评分缓存 ============
 
 /** 获取所有缓存的大模型评分 */

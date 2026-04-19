@@ -1,5 +1,13 @@
 # 变更日志
 
+## 2026-04-19（夜）
+
+### 修复：同步中本地完成的任务被整轮缓冲 flush 写回 IDB
+
+- **问题**：上一版改成"整轮缓冲、一次落 IDB"后漏了一种场景——某任务在它那一页 `onPage` 返回之后、整轮 `fetchTasksDelta` 结束之前被用户 `completeTask` 掉，`completeTask` 虽然已经把它从 store 和 IDB 都去除，但 `upsertedBuffer` 仍持有那页的原始对象；等到非 reset 分支最后 `upsertTasks(upsertedBuffer)` 就把这个已完成的任务**重新写回 IDB**，随后 `saveTasksDeltaLink` 推进游标。一旦刷新或离线重开，`loadFromCache` 把它读回来塞给 store，已完成任务"死而复生"，至少要等下一次成功同步拉回它的 `completed` 状态才能收敛
+- **修复**：非 reset 分支 flush 前先读一次 store 当前状态，把 `upsertedBuffer` 里"store 已没有"的任务过滤掉（对称 reset 分支用 `memTasks` vs `current` diff 识别本地删除的做法）——这类任务被判定为"同步期间本地删除/完成"，不写回 IDB；`completeTask` 已做过 `deleteCachedTask`，无需再追加到 `removedBuffer`
+- **代价**：零——`useAppStore.getState()` 是同步内存读；过滤是一次 Set 查找
+
 ## 2026-04-19（傍晚）
 
 ### 修复：任务 Delta 同步的持久层原子性与派生副作用门控

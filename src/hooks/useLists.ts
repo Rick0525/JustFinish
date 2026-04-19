@@ -117,7 +117,9 @@ export function useLists() {
                   .concat(upserted)
                 setTasksForList(list.id, next)
                 // IDB 缓冲：deltaLink 未提交前不落盘
-                // buffer 只含未完成任务的完整对象 + 已完成/删除的 id，graph.ts 已做筛选
+                // 注意：graph.ts 只会过滤"服务端已标记 completed"的任务；用户在本轮同步期间
+                // completeTask 掉的任务，服务端此刻未必感知，仍会作为未完成对象进 upserted。
+                // 所以这里原样 push，flush 前再按 store 当前状态做最终过滤（见下方 else 分支）
                 upsertedBuffer.push(...upserted)
                 removedBuffer.push(...removed)
               }
@@ -148,8 +150,18 @@ export function useLists() {
               setTasksForList(list.id, finalTasks)
             } else {
               // 正常增量：整轮成功后才把缓冲落 IDB（先删后插，与原页级写入顺序一致）
+              // flush 前剔除"同步期间被本地 completeTask/删除"的任务：
+              // upsertedBuffer 里有但 store 当前已没有的 id，说明用户在该任务那页返回之后
+              // 把它删掉了（store 已去除，IDB 也被 deleteCachedTask 删过），这里不能再写回，
+              // 否则刷新后会从 IDB 复活。下一轮 delta 会带它们的 completed 状态做最终收敛
+              const current =
+                useAppStore.getState().tasksByList[list.id] ?? []
+              const currentIds = new Set(current.map((t) => t.id))
+              const finalUpserts = upsertedBuffer.filter((t) =>
+                currentIds.has(t.id)
+              )
               if (removedBuffer.length > 0) await deleteTasks(removedBuffer)
-              if (upsertedBuffer.length > 0) await upsertTasks(upsertedBuffer)
+              if (finalUpserts.length > 0) await upsertTasks(finalUpserts)
             }
 
             // IDB 落盘完成后再保存 deltaLink，保证游标不会越过持久层数据

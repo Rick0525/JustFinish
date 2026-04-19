@@ -1,5 +1,16 @@
 # 变更日志
 
+## 2026-04-19（傍晚）
+
+### 修复：任务 Delta 同步的持久层原子性与派生副作用门控
+
+- **问题**：流式渲染版把 `upsertTasks` / `deleteTasks` 做成每页 IDB 写入，但 `saveTasksDeltaLink` 只在整轮成功后保存——任一页失败就会在 IDB 留"部分新数据 + 旧游标"的半成品，刷新后 `useTasks.loadFromCache` 还会把半成品当真相喂给 store；同时 `Layout.doSync` 无视 `failedCount` 照样 `saveLastSync()` 和 `runSort()`，导致 UI 误报"刚同步过"、LLM 基于半成品状态算分污染 `llmScores` + `llmHash`
+- **修复**（原则：**允许渐进更新 UI，但在 deltaLink 提交前不提交持久层或派生副作用**）：
+  - `useLists` 正常增量分支改为两级缓冲：`setTasksForList` 继续每页推 store 渐进渲染；`upsertTasks` / `deleteTasks` 改写进 `upsertedBuffer` / `removedBuffer`，`fetchTasksDelta` 整轮返回后再一次性落 IDB，最后才 `saveTasksDeltaLink`
+  - 中途失败 → 缓冲丢弃、游标不进，下次同步从旧 deltaLink 重放；`loadFromCache` 读到的仍是上轮一致的 IDB 状态
+  - `Layout.doSync`：`saveLastSync()` 和 `runSort(config)` 都加 `failedCount === 0` 守卫；部分失败时放弃本轮 LLM 刷新（下次全部成功再跑）
+- **代价**：正常增量的 IDB 写入从"每页一次"变为"每轮一次"，内存多持有当轮变更（等量于 resetBuffer，typical 1-2MB 上限，且只装未完成任务的完整对象 + 已完成/删除的 id）
+
 ## 2026-04-19（下午）
 
 ### 修复：同步中 `completeTask` 的任务被下一页合并"复活"

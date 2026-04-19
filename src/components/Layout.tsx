@@ -52,16 +52,23 @@ export function Layout({ msalInstance, account }: LayoutProps) {
     try {
       const token = await getToken()
       const { failedCount } = await syncLists(token)
-      await saveLastSync()
+      // saveLastSync / runSort 都是派生副作用，只在全部清单都同步成功时才推进：
+      // 有清单失败说明 store 里是"部分新 + 部分旧"的混合态，记录成"刚同步过"会误导 UI，
+      // 让 LLM 排序基于这个混合态算分还会写入 llmScores + llmHash 污染缓存
+      if (failedCount === 0) {
+        await saveLastSync()
+      }
       setSyncStatus(failedCount > 0 ? 'error' : 'success')
 
-      // 同步完成后尝试大模型排序
-      const config = getLLMConfig()
-      if (config?.providerId && config?.apiKey && config?.model) {
-        try {
-          await runSort(config)
-        } catch (err) {
-          console.error('[LLMSort] 排序失败:', err)
+      // 同步完成后尝试大模型排序（仅全部成功时）
+      if (failedCount === 0) {
+        const config = getLLMConfig()
+        if (config?.providerId && config?.apiKey && config?.model) {
+          try {
+            await runSort(config)
+          } catch (err) {
+            console.error('[LLMSort] 排序失败:', err)
+          }
         }
       }
 

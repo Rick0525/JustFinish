@@ -96,11 +96,16 @@ MSAL v5 使用 `BroadcastChannel` API 进行弹窗与父窗口的通信（非旧
 ### 任务 Delta 的流式渲染
 
 - `fetchTasksDelta` 接受可选 `onPage(page)` 回调，每拉完一页立即回调；有 `onPage` 时函数内部不再累积整体数组，避免大账号首次同步上千条任务撑爆内存
-- `useLists` 每页合并的**基**是 `useAppStore.getState().tasksByList[listId] ?? []`（store 当前状态），不是 worker 入口的固定快照——这样同步期间用户若 `completeTask` 掉某任务，下一页合并不会把它"复活"；IDB 写入（`upsertTasks` / `deleteTasks`）照旧，作为下次 `loadFromCache` 的持久来源
+- **分层落地**：UI 走 store 渐进更新（每页一次 `setTasksForList`），IDB 落盘和 `saveTasksDeltaLink` **都延到整轮成功后**
+  - 每页合并的**基**是 `useAppStore.getState().tasksByList[listId] ?? []`（store 当前状态），不是 worker 入口的固定快照——这样同步期间用户若 `completeTask` 掉某任务，下一页合并不会把它"复活"
+  - 每页变更只入 `upsertedBuffer` / `removedBuffer`（内存）；`fetchTasksDelta` 整轮成功返回后，先 `deleteTasks` + `upsertTasks` 一次性落 IDB，再 `saveTasksDeltaLink` 保存游标
+  - 中途任一页失败：内存 buffer 丢弃、游标不进，下次同步从旧 deltaLink 重放；`loadFromCache` 读到的仍是上轮一致的 IDB 状态，不会有"半成品"持久化
+  - buffer 只含未完成任务对象 + 已完成/删除的 id（graph.ts 已按 `@removed` / `status === 'completed'` 筛过），内存占用与 resetBuffer 同量级
 - worker 入口仍读一次 `getCachedTasksByList` 存为 `memTasks`，仅用于 **410 重置收尾**的 id diff 基线
 - 410 重置场景（`onPage` 首次带 `reset: true`）切换到「缓冲模式」：不动 IDB 也不动 store，累积到 `resetBuffer`；拉完后做两层过滤：
   - 用 `memTasks vs store` 差集识别"同步期间用户本地已完成/删除"的任务，从 `resetBuffer` 里剔除（避免被服务端过期快照复活，下一轮 delta 会自然收敛）
   - 剩下的 `finalTasks` 与 `memTasks` 做 id diff，只对差集调 `deleteTasks` / `upsertTasks`，屏幕平滑替换
+- **派生副作用门控**：`Layout.doSync` 只在 `failedCount === 0` 时才 `saveLastSync()` 和 `runSort(config)`——有清单失败说明 store 是"部分新 + 部分旧"的混合态，推进 lastSync / LLM 排序会误导 UI 与污染 `llmScores` + `llmHash` 缓存
 - 性能：IDB 全表扫每个 worker 仍只发生 1 次（worker 入口读 `memTasks`）；每页合并走 store 内存读（零成本）
 
 ### MSAL 并发初始化

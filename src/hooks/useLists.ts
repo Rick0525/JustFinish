@@ -89,6 +89,10 @@ export function useLists() {
             // 410 重置标志：一旦置位就进入「缓冲」模式，到拉完后再按 id diff 统一落地
             let isReset = false
             const resetBuffer: TodoTask[] = []
+            // 正常增量持久层缓冲：整轮拉完后再一次性落 IDB，与 saveTasksDeltaLink 同原子
+            // 中途失败 → 缓冲丢弃、游标不进，下次同步从旧 deltaLink 重放，避免半成品
+            const upsertedBuffer: TodoTask[] = []
+            const removedBuffer: string[] = []
 
             const result = await fetchTasksDelta(
               accessToken,
@@ -102,11 +106,8 @@ export function useLists() {
                   resetBuffer.push(...upserted)
                   return
                 }
-                // 正常增量：写 IDB 持久化 + 合并到 store 推渐进渲染
-                if (upserted.length > 0) await upsertTasks(upserted)
-                if (removed.length > 0) await deleteTasks(removed)
-                // 合并基用 store 当前状态而非 worker 入口的固定快照：
-                // 同步期间用户若 completeTask 掉某个任务，store 已去掉它，这里不会再把它复活
+                // 渐进渲染：store 合并（UI 立即看到），合并基用 store 当前状态
+                // 这样同步期间用户 completeTask 掉的任务不会被下一页"复活"
                 const current =
                   useAppStore.getState().tasksByList[list.id] ?? []
                 const upsertIds = new Set(upserted.map((t) => t.id))
@@ -115,6 +116,10 @@ export function useLists() {
                   .filter((t) => !upsertIds.has(t.id) && !removedSet.has(t.id))
                   .concat(upserted)
                 setTasksForList(list.id, next)
+                // IDB 缓冲：deltaLink 未提交前不落盘
+                // buffer 只含未完成任务的完整对象 + 已完成/删除的 id，graph.ts 已做筛选
+                upsertedBuffer.push(...upserted)
+                removedBuffer.push(...removed)
               }
             )
 
@@ -141,8 +146,13 @@ export function useLists() {
               if (toDelete.length > 0) await deleteTasks(toDelete)
               if (finalTasks.length > 0) await upsertTasks(finalTasks)
               setTasksForList(list.id, finalTasks)
+            } else {
+              // 正常增量：整轮成功后才把缓冲落 IDB（先删后插，与原页级写入顺序一致）
+              if (removedBuffer.length > 0) await deleteTasks(removedBuffer)
+              if (upsertedBuffer.length > 0) await upsertTasks(upsertedBuffer)
             }
 
+            // IDB 落盘完成后再保存 deltaLink，保证游标不会越过持久层数据
             if (result.deltaLink) {
               await saveTasksDeltaLink(list.id, result.deltaLink)
             }

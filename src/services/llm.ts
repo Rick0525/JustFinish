@@ -200,7 +200,11 @@ function parseScores(content: string, validIds: string[]): LLMScore[] {
 
   const idSet = new Set(validIds)
   return parsed
-    .filter((item: { id?: string }) => item.id && idSet.has(item.id))
+    .filter((item: { id?: string; urgency?: unknown; importance?: unknown }) =>
+      item.id && idSet.has(item.id) &&
+      typeof item.urgency === 'number' && isFinite(item.urgency) &&
+      typeof item.importance === 'number' && isFinite(item.importance)
+    )
     .map((item: { id: string; urgency: number; importance: number }) => ({
       taskId: item.id,
       urgency: Math.min(10, Math.max(1, Math.round(item.urgency))),

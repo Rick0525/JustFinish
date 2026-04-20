@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { TodoList, TodoTask, LLMScore, ViewMode, SyncStatus } from '../types'
+import type { TodoList, TodoTask, LLMScore, LLMConfig, ViewMode, SyncStatus } from '../types'
 import { STORAGE_KEYS } from '../utils/constants'
 
 interface AppState {
@@ -11,6 +11,8 @@ interface AppState {
   llmScores: Record<string, LLMScore>
   /** 被隐藏的清单 id（不在 UI 显示，也不参与 LLM 排序） */
   hiddenListIds: string[]
+  /** 大模型配置 */
+  llmConfig: LLMConfig | null
 
   // ====== UI 状态 ======
   viewMode: ViewMode
@@ -27,6 +29,7 @@ interface AppState {
   removeTask: (listId: string, taskId: string) => void
   setLLMScores: (scores: LLMScore[]) => void
   setHiddenListIds: (ids: string[]) => void
+  setLLMConfig: (config: LLMConfig) => void
   setViewMode: (mode: ViewMode) => void
   setSelectedListId: (id: string | null) => void
   setSyncStatus: (status: SyncStatus) => void
@@ -41,6 +44,17 @@ function getInitialViewMode(): ViewMode {
     return saved
   }
   return 'byList'
+}
+
+/** 从 localStorage 读取大模型配置 */
+function getInitialLLMConfig(): LLMConfig | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.llmConfig)
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
 }
 
 /** 从 localStorage 读取隐藏清单 id 列表 */
@@ -61,6 +75,7 @@ export const useAppStore = create<AppState>((set) => ({
   tasksByList: {},
   llmScores: {},
   hiddenListIds: getInitialHiddenListIds(),
+  llmConfig: getInitialLLMConfig(),
 
   // 初始 UI 状态
   viewMode: getInitialViewMode(),
@@ -114,6 +129,11 @@ export const useAppStore = create<AppState>((set) => ({
     set({ hiddenListIds: ids })
   },
 
+  setLLMConfig: (config) => {
+    localStorage.setItem(STORAGE_KEYS.llmConfig, JSON.stringify(config))
+    set({ llmConfig: config })
+  },
+
   setViewMode: (mode) => {
     localStorage.setItem(STORAGE_KEYS.viewMode, mode)
     set({ viewMode: mode })
@@ -124,6 +144,13 @@ export const useAppStore = create<AppState>((set) => ({
   setSettingsOpen: (open) => set({ settingsOpen: open }),
   setIsSorting: (sorting) => set({ isSorting: sorting }),
 }))
+
+/** 判断大模型是否已配置（自定义供应商不要求 apiKey） */
+export function isLLMConfigured(config: LLMConfig | null): boolean {
+  if (!config?.providerId || !config.model) return false
+  if (config.providerId === 'custom') return !!config.customBaseUrl
+  return !!config.apiKey
+}
 
 /** 获取所有任务（扁平化） */
 export function getAllTasks(state: Pick<AppState, 'tasksByList'>): TodoTask[] {

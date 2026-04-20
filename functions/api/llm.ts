@@ -5,7 +5,13 @@ import { isAllowedUrl } from '../../src/utils/llmProviders'
 
 type Env = Record<string, unknown>
 
+const MAX_BODY_SIZE = 200_000
+const FETCH_TIMEOUT_MS = 30_000
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const json = (data: unknown, status = 200) =>
+    new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } })
+
   try {
     const { targetUrl, apiKey, body } = await context.request.json() as {
       targetUrl?: string
@@ -13,42 +19,39 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       body?: unknown
     }
 
-    if (!targetUrl || !apiKey || !body) {
-      return new Response(
-        JSON.stringify({ error: '缺少必要参数：targetUrl, apiKey, body' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      )
+    if (!targetUrl || !body) {
+      return json({ error: '缺少必要参数：targetUrl, body' }, 400)
     }
 
     if (!isAllowedUrl(targetUrl)) {
-      return new Response(
-        JSON.stringify({ error: '目标地址不在允许列表中' }),
-        { status: 403, headers: { 'Content-Type': 'application/json' } }
-      )
+      return json({ error: '目标地址不在允许列表中' }, 403)
     }
 
-    // 转发请求到目标大模型 API
+    const payload = JSON.stringify(body)
+    if (payload.length > MAX_BODY_SIZE) {
+      return json({ error: '请求体过大' }, 413)
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+
     const response = await fetch(targetUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
+      headers,
+      body: payload,
+      signal: controller.signal,
     })
+    clearTimeout(timer)
 
     const data = await response.json()
-
-    return new Response(JSON.stringify(data), {
-      status: response.status,
-      headers: { 'Content-Type': 'application/json' },
-    })
+    return json(data, response.status)
   } catch (error) {
-    return new Response(
-      JSON.stringify({
-        error: `代理请求失败: ${error instanceof Error ? error.message : '未知错误'}`,
-      }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    )
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? '上游请求超时'
+      : '代理请求失败'
+    return json({ error: message }, 502)
   }
 }

@@ -1,9 +1,8 @@
 import { useMemo } from 'react'
-import { useAppStore, getVisibleTasks } from '../stores/appStore'
+import { useAppStore, getVisibleTasks, isLLMConfigured } from '../stores/appStore'
 import { TaskList } from './TaskList'
 import { getQuadrant, getQuadrantByDate } from '../utils/quadrant'
 import { useT } from '../i18n'
-import { isLLMConfigured } from '../hooks/useSettings'
 import type { Quadrant, TodoTask } from '../types'
 
 interface QuadrantViewProps {
@@ -57,7 +56,8 @@ export function QuadrantView({ onComplete }: QuadrantViewProps) {
   const llmScores = useAppStore((s) => s.llmScores)
   const isSorting = useAppStore((s) => s.isSorting)
 
-  const hasLLM = isLLMConfigured()
+  const llmConfig = useAppStore((s) => s.llmConfig)
+  const hasLLM = isLLMConfigured(llmConfig)
   const hasScores = Object.keys(llmScores).length > 0
 
   // 将任务分配到四象限

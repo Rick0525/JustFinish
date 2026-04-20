@@ -5,7 +5,7 @@ import type { TodoList, TodoTask, LLMScore } from '../types'
 /** IndexedDB 数据库 schema */
 interface JustFinishDB {
   lists: { key: string; value: TodoList }
-  tasks: { key: string; value: TodoTask }
+  tasks: { key: string; value: TodoTask; indexes: { listId: string } }
   llmScores: { key: string; value: LLMScore }
   syncMeta: { key: string; value: string }
 }
@@ -17,19 +17,11 @@ function getDB() {
   if (!dbPromise) {
     dbPromise = openDB<JustFinishDB>(DB_NAME, DB_VERSION, {
       upgrade(db) {
-        // 创建对象存储
-        if (!db.objectStoreNames.contains('lists')) {
-          db.createObjectStore('lists', { keyPath: 'id' })
-        }
-        if (!db.objectStoreNames.contains('tasks')) {
-          db.createObjectStore('tasks', { keyPath: 'id' })
-        }
-        if (!db.objectStoreNames.contains('llmScores')) {
-          db.createObjectStore('llmScores', { keyPath: 'taskId' })
-        }
-        if (!db.objectStoreNames.contains('syncMeta')) {
-          db.createObjectStore('syncMeta')
-        }
+        db.createObjectStore('lists', { keyPath: 'id' })
+        const taskStore = db.createObjectStore('tasks', { keyPath: 'id' })
+        taskStore.createIndex('listId', 'listId')
+        db.createObjectStore('llmScores', { keyPath: 'taskId' })
+        db.createObjectStore('syncMeta')
       },
     })
   }
@@ -64,11 +56,10 @@ export async function deleteList(listId: string) {
 export async function deleteTasksByList(listId: string) {
   const db = await getDB()
   const tx = db.transaction('tasks', 'readwrite')
-  const allTasks = await tx.store.getAll()
-  for (const task of allTasks) {
-    if (task.listId === listId) {
-      await tx.store.delete(task.id)
-    }
+  let cursor = await tx.store.index('listId').openCursor(listId)
+  while (cursor) {
+    cursor.delete()
+    cursor = await cursor.continue()
   }
   await tx.done
 }
@@ -89,8 +80,8 @@ export async function getCachedTasks(): Promise<TodoTask[]> {
 
 /** 获取指定列表的缓存任务 */
 export async function getCachedTasksByList(listId: string): Promise<TodoTask[]> {
-  const allTasks = await getCachedTasks()
-  return allTasks.filter((t) => t.listId === listId)
+  const db = await getDB()
+  return db.getAllFromIndex('tasks', 'listId', listId)
 }
 
 /** 保存任务到缓存（替换指定列表的所有任务） */
@@ -98,12 +89,11 @@ export async function saveTasksForList(listId: string, tasks: TodoTask[]) {
   const db = await getDB()
   const tx = db.transaction('tasks', 'readwrite')
 
-  // 先删除该列表的旧任务
-  const allTasks = await tx.store.getAll()
-  for (const task of allTasks) {
-    if (task.listId === listId) {
-      await tx.store.delete(task.id)
-    }
+  // 先用索引游标删除该列表的旧任务
+  let cursor = await tx.store.index('listId').openCursor(listId)
+  while (cursor) {
+    cursor.delete()
+    cursor = await cursor.continue()
   }
 
   // 写入新任务

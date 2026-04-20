@@ -34,4 +34,4 @@ export const STORAGE_KEYS = {
 
 // IndexedDB 数据库名
 export const DB_NAME = 'justfinish_db'
-export const DB_VERSION = 1
+export const DB_VERSION = 2

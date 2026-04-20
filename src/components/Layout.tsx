@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { AccountInfo, PublicClientApplication } from '@azure/msal-browser'
-import { useAppStore } from '../stores/appStore'
+import { useAppStore, isLLMConfigured as isLLMConfiguredFn } from '../stores/appStore'
 import { useT } from '../i18n'
 import { Sidebar } from './Sidebar'
 import { SyncIndicator } from './SyncIndicator'
@@ -11,7 +11,6 @@ import { QuadrantView } from './QuadrantView'
 import { useLists } from '../hooks/useLists'
 import { useTasks } from '../hooks/useTasks'
 import { useLLMSort } from '../hooks/useLLMSort'
-import { useSettings } from '../hooks/useSettings'
 import { acquireToken, logout } from '../services/auth'
 import { saveLastSync } from '../services/cache'
 
@@ -30,10 +29,12 @@ export function Layout({ msalInstance, account }: LayoutProps) {
   const setSyncStatus = useAppStore((s) => s.setSyncStatus)
   const isSorting = useAppStore((s) => s.isSorting)
 
+  const llmConfig = useAppStore((s) => s.llmConfig)
+  const isConfigured = isLLMConfiguredFn(llmConfig)
+
   const { loadFromCache: loadListsCache, syncLists } = useLists()
   const { loadFromCache: loadTasksCache, completeTask } = useTasks()
   const { loadFromCache: loadScoresCache, runSort, forceSort } = useLLMSort()
-  const { getLLMConfig, isConfigured } = useSettings()
 
   const syncingRef = useRef(false)
   const idleTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -62,10 +63,10 @@ export function Layout({ msalInstance, account }: LayoutProps) {
 
       // 同步完成后尝试大模型排序（仅全部成功时）
       if (failedCount === 0) {
-        const config = getLLMConfig()
-        if (config?.providerId && config?.apiKey && config?.model) {
+        const config = useAppStore.getState().llmConfig
+        if (isLLMConfiguredFn(config)) {
           try {
-            await runSort(config)
+            await runSort(config!)
           } catch (err) {
             console.error('[LLMSort] 排序失败:', err)
           }
@@ -81,7 +82,7 @@ export function Layout({ msalInstance, account }: LayoutProps) {
     } finally {
       syncingRef.current = false
     }
-  }, [getToken, syncLists, setSyncStatus, getLLMConfig, runSort])
+  }, [getToken, syncLists, setSyncStatus, runSort])
 
   /** 完成任务 */
   const handleComplete = useCallback(
@@ -103,15 +104,15 @@ export function Layout({ msalInstance, account }: LayoutProps) {
 
   /** 大模型配置保存后触发排序 */
   const handleLLMConfigSaved = useCallback(async () => {
-    const config = getLLMConfig()
-    if (config?.providerId && config?.apiKey && config?.model) {
+    const config = useAppStore.getState().llmConfig
+    if (isLLMConfiguredFn(config)) {
       try {
-        await forceSort(config)
+        await forceSort(config!)
       } catch (err) {
         console.error('[LLMSort] 排序失败:', err)
       }
     }
-  }, [getLLMConfig, forceSort])
+  }, [forceSort])
 
   // 启动时加载缓存并同步
   useEffect(() => {

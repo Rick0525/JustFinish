@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useT, getLang } from '../i18n'
-import { useSettings } from '../hooks/useSettings'
 import { useAppStore } from '../stores/appStore'
 import { LLM_PROVIDERS, getProviderById } from '../utils/llmProviders'
 import { DEFAULT_PROMPT_ZH, DEFAULT_PROMPT_EN } from '../services/llm'
@@ -23,7 +22,8 @@ export function SettingsModal({
   onLLMConfigSaved,
 }: SettingsModalProps) {
   const t = useT()
-  const { llmConfig, saveLLMConfig } = useSettings()
+  const llmConfig = useAppStore((s) => s.llmConfig)
+  const saveLLMConfig = useAppStore((s) => s.setLLMConfig)
   const lists = useAppStore((s) => s.lists)
   const hiddenListIds = useAppStore((s) => s.hiddenListIds)
   const setHiddenListIds = useAppStore((s) => s.setHiddenListIds)

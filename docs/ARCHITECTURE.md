@@ -39,8 +39,7 @@ src/
 ├── hooks/                      # React Hooks
 │   ├── useLists.ts             # 列表 Delta 同步
 │   ├── useTasks.ts             # 任务获取与完成
-│   ├── useLLMSort.ts           # 大模型排序
-│   └── useSettings.ts          # 配置管理
+│   └── useLLMSort.ts           # 大模型排序
 ├── stores/
 │   └── appStore.ts             # Zustand 全局状态
 ├── types/
@@ -62,9 +61,13 @@ src/
 
 MSAL v5 使用 `BroadcastChannel` API 进行弹窗与父窗口的通信（非旧版的 URL 轮询）。弹窗回调页面必须调用 `broadcastResponseToMainFrame()`（从 `@azure/msal-browser/redirect-bridge` 导出）来完成认证流程。
 
+### 大模型配置管理
+
+LLM 配置（供应商、API Key、模型名、自定义 Prompt）统一存储在 Zustand store（`appStore.llmConfig`），持久化到 localStorage。所有组件通过 `useAppStore((s) => s.llmConfig)` 读取，`isLLMConfigured()` 纯函数判断是否可用。自定义供应商（`providerId === 'custom'`）不要求 API Key。
+
 ### 大模型供应商白名单
 
-所有供应商定义集中在 `src/utils/llmProviders.ts`，前端设置界面和三个代理函数（Vercel / Cloudflare / Vite dev）共用同一数据源。代理仅允许精确域名匹配（无子域名通配），防止 SSRF。
+所有供应商定义集中在 `src/utils/llmProviders.ts`，前端设置界面和三个代理函数（Vercel / Cloudflare / Vite dev）共用同一数据源。代理校验规则：精确域名匹配 + 路径后缀必须为 `/chat/completions` 或 `/completions`。
 
 ### 数据流
 
@@ -112,8 +115,23 @@ MSAL v5 使用 `BroadcastChannel` API 进行弹窗与父窗口的通信（非旧
 
 - `auth.getMsalInstance()` 缓存的是初始化 Promise 而非实例，避免 React StrictMode 双挂载下第二次调用在 `initialize()` 未完成时就拿到实例
 
+### IndexedDB 缓存
+
+- DB_VERSION = 2，tasks store 含 `listId` 索引
+- 按列表查询/删除任务走索引而非全表扫描
+
+### 类型检查覆盖
+
+`tsc -b` 通过四个 tsconfig reference 覆盖全部代码区域：
+- `tsconfig.app.json` → `src/`（前端应用）
+- `tsconfig.node.json` → `vite.config.ts`（构建配置）
+- `tsconfig.api.json` → `api/`（Vercel Serverless Function）
+- `tsconfig.functions.json` → `functions/`（Cloudflare Pages Function）
+
 ### 部署架构
 
 - **Vercel**: `api/llm.ts` — Serverless Function 代理
 - **Cloudflare Pages**: `functions/api/llm.ts` — Pages Function 代理
 - **本地开发**: `vite.config.ts` — Vite dev server 中间件代理
+
+三端代理均有：200KB body 大小限制、30s 上游超时、路径后缀白名单

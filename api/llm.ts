@@ -4,8 +4,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { isAllowedUrl } from '../src/utils/llmProviders.js'
 
+const MAX_BODY_SIZE = 200_000
+const FETCH_TIMEOUT_MS = 30_000
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // 只允许 POST 请求
   if (req.method !== 'POST') {
     return res.status(405).json({ error: '仅支持 POST 请求' })
   }
@@ -13,23 +15,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { targetUrl, apiKey, body } = req.body
 
-    if (!targetUrl || !apiKey || !body) {
-      return res.status(400).json({ error: '缺少必要参数：targetUrl, apiKey, body' })
+    if (!targetUrl || !body) {
+      return res.status(400).json({ error: '缺少必要参数：targetUrl, body' })
     }
 
     if (!isAllowedUrl(targetUrl)) {
       return res.status(403).json({ error: '目标地址不在允许列表中' })
     }
 
-    // 转发请求到目标大模型 API
+    const payload = JSON.stringify(body)
+    if (payload.length > MAX_BODY_SIZE) {
+      return res.status(413).json({ error: '请求体过大' })
+    }
+
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+
     const response = await fetch(targetUrl, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(body),
+      headers,
+      body: payload,
+      signal: controller.signal,
     })
+    clearTimeout(timer)
 
     const data = await response.json()
 
@@ -39,8 +50,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json(data)
   } catch (error) {
-    return res.status(500).json({
-      error: `代理请求失败: ${error instanceof Error ? error.message : '未知错误'}`,
-    })
+    const message = error instanceof Error && error.name === 'AbortError'
+      ? '上游请求超时'
+      : '代理请求失败'
+    return res.status(502).json({ error: message })
   }
 }

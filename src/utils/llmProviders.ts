@@ -36,12 +36,16 @@ export function getProviderById(id: string): LLMProvider | undefined {
   return LLM_PROVIDERS.find(p => p.id === id)
 }
 
-/** 校验 targetUrl 是否指向白名单中的大模型 API（仅精确匹配域名） */
+/** 允许的 API 路径后缀 */
+const ALLOWED_PATH_SUFFIXES = ['/chat/completions', '/completions']
+
+/** 校验 targetUrl 是否指向白名单中的大模型 API（精确匹配域名 + 路径后缀） */
 export function isAllowedUrl(targetUrl: string): boolean {
   try {
     const url = new URL(targetUrl)
     if (url.protocol !== 'https:') return false
-    return ALLOWED_HOSTS.includes(url.hostname)
+    if (!ALLOWED_HOSTS.includes(url.hostname)) return false
+    return ALLOWED_PATH_SUFFIXES.some((suffix) => url.pathname.endsWith(suffix))
   } catch {
     return false
   }

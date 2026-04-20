@@ -1,5 +1,25 @@
 # 变更日志
 
+## 2026-04-20
+
+### 安全加固 + 代码质量修复（代码审查 7 项）
+
+- **依赖分类修正**：`@tailwindcss/vite`、`tailwindcss` 从 `dependencies` 移至 `devDependencies`，消除 production audit 误报 vite 漏洞；vite 升级至 8.0.9（修复路径穿越、`server.fs.deny` 绕过、WS 任意文件读取 3 条公告）
+- **LLM 代理防护加固**：三端代理（Vercel / Cloudflare / Vite dev）统一增加：
+  - URL 路径后缀白名单（仅允许 `/chat/completions` 和 `/completions`）
+  - 请求体 200KB 大小限制
+  - 30 秒上游超时（`AbortController`）
+  - `apiKey` 改为可选字段（支持无鉴权的自部署模型）
+  - 错误响应不再泄露内部错误详情
+- **LLM 评分 NaN 渗漏修复**：`parseScores` 增加 `typeof number + isFinite` 校验，非法值直接丢弃而非写入 NaN 污染排序
+- **LLM 配置状态统一**：删除独立的 `useSettings` hook，配置收归 Zustand store（`appStore.llmConfig`），所有组件共享同一状态源，SettingsModal 保存后 Layout 等消费方立即响应
+- **apiKey 可选矛盾修复**：`isLLMConfigured()` 对 `custom` 供应商不再要求 apiKey，与 UI "可选" 标注一致
+- **类型覆盖补全**：
+  - 安装 `@cloudflare/workers-types`，新增 `tsconfig.functions.json` 覆盖 `functions/`
+  - 新增 `tsconfig.api.json` 覆盖 `api/`
+  - `tsc -b` 现在完整检查 `src/` + `vite.config.ts` + `api/` + `functions/` 四个区域
+- **IndexedDB 查询优化**：tasks store 新增 `listId` 索引（DB_VERSION 升至 2），`deleteTasksByList`、`getCachedTasksByList`、`saveTasksForList` 改用索引查询/游标删除，复杂度从 O(全部任务) 降至 O(该列表任务)
+
 ## 2026-04-19（夜）
 
 ### 修复：同步中本地完成的任务被整轮缓冲 flush 写回 IDB

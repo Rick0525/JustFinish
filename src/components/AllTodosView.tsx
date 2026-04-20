@@ -1,10 +1,9 @@
 import { useMemo } from 'react'
-import { useAppStore, getVisibleTasks } from '../stores/appStore'
+import { useAppStore, getVisibleTasks, isLLMConfigured } from '../stores/appStore'
 import { TaskList } from './TaskList'
 import { sortTasksByDate } from '../utils/quadrant'
 import { getCompositeScore } from '../utils/quadrant'
 import { useT } from '../i18n'
-import { isLLMConfigured } from '../hooks/useSettings'
 
 interface AllTodosViewProps {
   onComplete: (listId: string, taskId: string) => Promise<void>
@@ -41,7 +40,8 @@ export function AllTodosView({ onComplete }: AllTodosViewProps) {
     return sortTasksByDate(tasks)
   }, [tasksByList, hiddenListIds, llmScores])
 
-  const hasLLM = isLLMConfigured()
+  const llmConfig = useAppStore((s) => s.llmConfig)
+  const hasLLM = isLLMConfigured(llmConfig)
   const hasScores = Object.keys(llmScores).length > 0
 
   return (
